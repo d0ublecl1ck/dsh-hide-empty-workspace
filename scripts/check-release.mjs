@@ -97,6 +97,23 @@ if (newest === null) fail('CHANGELOG.md: no "## <x.y.z>" section to compare pack
 else if (newest[1] !== pkg.version) fail('version drift: package.json says ' + pkg.version + ' but the newest CHANGELOG.md section is ' + newest[1])
 else pass('version matches the newest CHANGELOG.md section: ' + pkg.version)
 
+// 7. Every declared storefront screenshot must exist. The catalog site reads
+// screenshots.json from this repository, so a renamed file is a silent 404 on
+// somebody else's storefront — the upstream list counts 41 of 773 published
+// screenshots that rotted exactly this way.
+if (exists('screenshots.json')) {
+  const declared = JSON.parse(read('screenshots.json'))
+  const list = Array.isArray(declared) ? declared : declared.screenshots
+  if (!Array.isArray(list) || list.length < 1 || list.length > 8) fail('screenshots.json: must list 1-8 image paths')
+  else {
+    const missing = list.filter((entry) => typeof entry !== 'string' || entry.startsWith('/') || entry.includes('..') || !exists(entry))
+    if (missing.length > 0) fail('screenshots.json points at unusable paths: ' + missing.join(', '))
+    else pass('screenshots.json: ' + list.length + ' declared image(s) all exist')
+  }
+} else {
+  pass('screenshots.json: not declared (storefronts fall back to the README)')
+}
+
 console.log('check-release: ' + root)
 for (const message of passes) console.log('  ok    ' + message)
 for (const message of failures) console.log('  FAIL  ' + message)
