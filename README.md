@@ -30,7 +30,7 @@
 
 ## 效果示例
 
-![工作区行菜单里的「隐藏工作区」与底部「已隐藏 N」入口](assets/showcase/hide-empty-workspace.gif)
+![工作区行菜单里的「隐藏工作区」、底部「已隐藏 N」入口与官方恢复对话框](assets/showcase/hide-empty-workspace.gif)
 
 上图是侧栏一列的截图，工作区名已隐去。每一帧都由 `npm run verify:browser` 在真实实例上产出（DSH Desktop，2026-10-02，24 个工作区）。
 
@@ -46,9 +46,12 @@ PASS  the appended entry closes the shipped menu it lives in
 PASS  「隐藏工作区」 recorded both workspaces in localStorage: 9a1f4aca-…, eb5f9d32-…
 PASS  display:none actually reached the shipped rows (1 hidden, 1 kept as the workspace in use)
 PASS  sidebar footer shows 「已隐藏 2」
+PASS  the 「已隐藏 N」 entry opened the shipped modal (role=dialog, aria-label 「已隐藏的工作区」)
+PASS  the modal lists one 「恢复」 action per hidden workspace (2)
+PASS  the modal closed itself once the last workspace was restored
 PASS  restore returned the hidden set to its original value: (empty)
 PASS  no workspace row is left hidden (0)
-11 passed, 0 failed
+14 passed, 0 failed
 ```
 
 `display:none` 那一行是一次**实测**确认：连着隐藏两个工作区，只有一个变成 `display:none`，另一个是「正在使用的工作区」——它按设计保持可见。
@@ -84,7 +87,7 @@ Windows 上把路径换成本机对应位置即可，参数不变。
 
 - **自动**：你把某个工作区的最后一个未归档会话归档掉 → 它的行隐藏。
 - **手动**：悬停任意工作区行，点行内「…」菜单里的「隐藏工作区」。任何情况下都立即隐藏。
-- **恢复**：侧栏底部的「已隐藏 N」→ 展开 → 「恢复 <标题>」。
+- **恢复**：点侧栏底部的「已隐藏 N」→ 打开官方对话框 → 逐个「恢复」，恢复完自动关闭。
 - **自动恢复**：某个被隐藏的工作区重新有了未归档会话 → 自动取消隐藏。
 
 不会触发的情况：
@@ -108,15 +111,15 @@ Windows 上把路径换成本机对应位置即可，参数不变。
 - **不改写工作区注册**：不动 `workspaces` 服务，不动 `settings.yaml`。
 - **不联网**：插件不发任何请求。
 - **唯一写入**是浏览器 `localStorage` 里的隐藏集合（键 `dsh-hide-empty-workspace.hidden.v1`）。清掉它，一切恢复原样。
-- **不替换官方 UI**：只在官方已经渲染好的行上切 `display`，并在工作区行自带的「…」菜单里追加一项；不接管、不重绘官方组件。官方改版导致找不到行时，它不再默默无闻——侧栏底部会出现 `⚠ 工作区行标记失配，插件未生效`。
+- **不替换官方 UI**：只在官方已经渲染好的行上切 `display`，在工作区行自带的「…」菜单里追加一项，恢复入口用官方 `Modal`；不接管、不重绘官方组件。官方改版导致找不到行时，它不再默默无闻——侧栏底部会出现 `⚠ 工作区行标记失配，插件未生效`。
 
 ## 文件结构
 
 ```text
 index.js                    宿主半边（本插件不需要宿主能力，占位 apply）
-client.js                   浏览器半边：判定、行菜单项注入、恢复入口、自检
+client.js                   浏览器半边：判定、行菜单项注入、官方 Modal 恢复入口、自检
 cordis.patch.yml            bundle 层，声明插入本插件
-tests/hidden-workspaces.test.mjs   19 条纯函数单测
+tests/hidden-workspaces.test.mjs   20 条纯函数单测
 scripts/verify-browser.mjs  真实浏览器验收 + 展示产物录制
 scripts/check-release.mjs   离线发布门
 assets/showcase/            由 verify-browser 产出的截图与 GIF
@@ -128,8 +131,8 @@ AGENTS.md                   给下一次会话的边界与命令
 ## 验证与测试
 
 ```sh
-npm test                  # 19 条纯函数单测
-npm run verify:browser    # 真实浏览器验收，需要实例在跑（11 条断言）
+npm test                  # 20 条纯函数单测
+npm run verify:browser    # 真实浏览器验收，需要实例在跑（14 条断言）
 npm run check-release     # 发布门：清单、入口、模块 id、platform seed、版本一致性
 npm run verify            # test + check-release
 ```

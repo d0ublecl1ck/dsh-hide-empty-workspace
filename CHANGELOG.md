@@ -2,6 +2,16 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的分节习惯，版本号遵循语义化版本。
 
+## 0.4.0 — 2026-10-02
+
+### 变更
+- **恢复入口改用官方 `Modal`**：侧栏底部的「已隐藏 N」不再就地展开一个自绘小面板，而是打开与 Desktop 同款的居中对话框（标题、说明、每行一个「恢复」、主色「关闭」、右上关闭叉、Esc 与遮罩点击关闭、关闭后焦点归还）。恢复最后一个后对话框自动关闭。
+- **展示产物扩到 5 帧**：新增 `assets/showcase/4-restore-dialog.png` 并列入 `screenshots.json`；原 `4-restored.png` 更名为 `5-restored.png`。
+
+### 说明
+- 对话框文案（标题 / 说明 / 恢复 / 关闭）与行菜单文案一样集中在 `client.js`，由单测钉住。
+- 官方 `Modal` 来自 platform seed 的 `@deepseek-ai/dsh-client-ui-primitives`，插件没有新增运行时依赖。
+
 ## 0.3.0 — 2026-10-02
 
 ### 变更
