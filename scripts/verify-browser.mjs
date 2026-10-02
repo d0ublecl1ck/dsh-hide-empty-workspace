@@ -58,6 +58,7 @@ const DEFAULTS = {
 const REDACTION_CSS = [
   '[data-row-key] * { color: transparent !important; text-shadow: none !important; }',
   '[data-row-key] { position: relative !important; }',
+  '[role="dialog"] span { color: transparent !important; text-shadow: none !important; background: rgba(120, 120, 120, 0.35) !important; border-radius: 4px !important; }',
   "[data-row-key]::after { content: ''; position: absolute; left: 10px; right: 24px; top: 50%; height: 9px; margin-top: -4.5px; border-radius: 4.5px; background: rgba(120, 120, 120, 0.35); pointer-events: none; }",
 ].join('\n')
 
@@ -188,6 +189,10 @@ const MENU_ITEM_TEXT = '隐藏工作区'
 const MENU_SELECTOR = '[role="menu"]'
 const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
 const RAIL_TOGGLE_SELECTOR = '[aria-label="打开侧边栏"], [aria-label="Open sidebar"]'
+const RESTORE_ENTRY_TEXT = '已隐藏 '
+const RESTORE_DIALOG_SELECTOR = '[role="dialog"]'
+const RESTORE_DIALOG_TITLE = '已隐藏的工作区'
+const RESTORE_ACTION_TEXT = '恢复'
 
 const probeExpression = `(() => {
   const rows = [...document.querySelectorAll('[data-row-key^="workspace:"]')]
@@ -202,6 +207,7 @@ const probeExpression = `(() => {
     menuOpen: document.querySelector('[role="menu"]') !== null,
     menuItems,
     menuEntry: menuItems.includes('隐藏工作区'),
+    restoreDialogOpen: document.querySelector('[role="dialog"]') !== null,
     hiddenFooter: (body.match(/已隐藏 (\\d+)/) ?? [])[1] ?? null,
     storedIds: (() => {
       try {
@@ -223,11 +229,23 @@ async function waitFor(cdp, sessionId, predicate, what) {
   throw new Error('timed out waiting for ' + what + '; last probe: ' + JSON.stringify(last))
 }
 
-async function screenshot(cdp, sessionId, path) {
-  const height = config.redact ? await evaluate(cdp, sessionId, 'window.innerHeight') : null
+async function screenshot(cdp, sessionId, path, clipSelector) {
+  let clip = null
+  if (config.redact) {
+    const box = clipSelector
+      ? await evaluate(cdp, sessionId, '(() => { const element = document.querySelector(' + JSON.stringify(clipSelector) + '); if (!element) return null; const rect = element.getBoundingClientRect(); return { width: rect.width + 48, height: rect.height + 48 } })()')
+      : null
+    if (box === null) {
+      const height = await evaluate(cdp, sessionId, 'window.innerHeight')
+      clip = { x: 0, y: 0, width: CAPTURE_WIDTH, height, scale: 1 }
+    } else {
+      const origin = await evaluate(cdp, sessionId, '(() => { const element = document.querySelector(' + JSON.stringify(clipSelector) + '); const rect = element.getBoundingClientRect(); return { x: Math.max(0, rect.x - 24), y: Math.max(0, rect.y - 24), width: Math.min(window.innerWidth, rect.width + 48), height: Math.min(window.innerHeight, rect.height + 48) } })()')
+      clip = { ...origin, scale: 1 }
+    }
+  }
   const shot = await cdp.send('Page.captureScreenshot', {
     format: 'png',
-    ...(config.redact ? { clip: { x: 0, y: 0, width: CAPTURE_WIDTH, height, scale: 1 } } : {}),
+    ...(clip ? { clip } : {}),
   }, sessionId)
   writeFileSync(path, Buffer.from(shot.data, 'base64'))
 }
@@ -385,18 +403,30 @@ async function main() {
     await screenshot(cdp, sessionId, join(config.shots, '3-hidden.png'))
 
     // Restore everything with real clicks, and prove the stored set came back.
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const toggle = await boxOf('[...document.querySelectorAll("button")].find((button) => /^已隐藏 /.test(button.textContent))')
-      if (toggle !== null) { await clickAt(toggle); await sleep(350) }
-      for (;;) {
-        const restoreButton = await boxOf('[...document.querySelectorAll("button")].find((button) => /^恢复 /.test(button.textContent))')
-        if (restoreButton === null) break
-        await clickAt(restoreButton)
-        await sleep(350)
-      }
-      const left = await evaluate(cdp, sessionId, '[...document.querySelectorAll("button")].filter((button) => /^恢复 /.test(button.textContent)).length')
-      if (left === 0) break
+    // The 「已隐藏 N」 entry must open the shipped Modal, not a hand-drawn panel.
+    const entryButton = await boxOf('[...document.querySelectorAll("button")].find((button) => button.textContent.indexOf(' + JSON.stringify(RESTORE_ENTRY_TEXT) + ') === 0)')
+    if (entryButton === null) fail('no 「已隐藏 N」 entry to open the restore dialog')
+    else {
+      await clickAt(entryButton)
+      await sleep(500)
+      const dialog = await evaluate(cdp, sessionId, '(() => { const dialog = document.querySelector(' + JSON.stringify(RESTORE_DIALOG_SELECTOR) + '); if (dialog === null) return null; return { label: dialog.getAttribute("aria-label"), actions: [...dialog.querySelectorAll("button")].filter((button) => button.textContent.trim() === ' + JSON.stringify(RESTORE_ACTION_TEXT) + ').length } })()')
+      if (dialog !== null && dialog.label === RESTORE_DIALOG_TITLE) pass('the 「已隐藏 N」 entry opened the shipped modal (role=dialog, aria-label 「' + RESTORE_DIALOG_TITLE + '」)')
+      else fail('the 「已隐藏 N」 entry did not open the shipped modal (got ' + JSON.stringify(dialog) + ')')
+      if (dialog !== null && dialog.actions === targets.length) pass('the modal lists one 「' + RESTORE_ACTION_TEXT + '」 action per hidden workspace (' + dialog.actions + ')')
+      else fail('expected ' + targets.length + ' 「' + RESTORE_ACTION_TEXT + '」 actions, got ' + (dialog === null ? 'no dialog' : dialog.actions))
+      await screenshot(cdp, sessionId, join(config.shots, '4-restore-dialog.png'), RESTORE_DIALOG_SELECTOR)
     }
+
+    // Restore every workspace from inside the modal, with real clicks.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const restoreButton = await boxOf('(() => { const dialog = document.querySelector(' + JSON.stringify(RESTORE_DIALOG_SELECTOR) + '); if (dialog === null) return null; return [...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === ' + JSON.stringify(RESTORE_ACTION_TEXT) + ') ?? null })()')
+      if (restoreButton === null) break
+      await clickAt(restoreButton)
+      await sleep(350)
+    }
+    const dialogClosed = await evaluate(cdp, sessionId, 'document.querySelector(' + JSON.stringify(RESTORE_DIALOG_SELECTOR) + ') === null')
+    if (dialogClosed) pass('the modal closed itself once the last workspace was restored')
+    else fail('the modal stayed open after the restores')
 
     const afterRestore = await evaluate(cdp, sessionId, probeExpression)
     const sameSet = JSON.stringify(afterRestore.storedIds) === JSON.stringify([...before.storedIds].sort())
@@ -404,11 +434,11 @@ async function main() {
     else fail('hidden set was not restored: was ' + JSON.stringify(before.storedIds) + ', now ' + JSON.stringify(afterRestore.storedIds))
     if (afterRestore.hiddenRows === before.hiddenRows) pass('no workspace row is left hidden (' + afterRestore.hiddenRows + ')')
     else fail('a row is still hidden: ' + afterRestore.hiddenRows)
-    await screenshot(cdp, sessionId, join(config.shots, '4-restored.png'))
+    await screenshot(cdp, sessionId, join(config.shots, '5-restored.png'))
 
     if (config.gif !== null) {
       mkdirSync(dirname(config.gif), { recursive: true })
-      const frames = ['1-workspaces.png', '2-hide-menu.png', '3-hidden.png', '4-restored.png']
+      const frames = ['1-workspaces.png', '2-hide-menu.png', '3-hidden.png', '4-restore-dialog.png', '5-restored.png']
       for (const [index, frame] of frames.entries()) {
         writeFileSync(join(config.shots, 'frame-' + String(index + 1).padStart(2, '0') + '.png'), readFileSync(join(config.shots, frame)))
       }

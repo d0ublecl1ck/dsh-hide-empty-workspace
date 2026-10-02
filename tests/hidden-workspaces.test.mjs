@@ -10,6 +10,9 @@ async function loadPlugin() {
     await import('../client.js')
     assert.equal(definition.id, 'dsh-hide-empty-workspace')
     const mod = definition.factory((name) => {
+      if (name === '@deepseek-ai/dsh-client-ui-primitives') {
+        return { Button: () => null, Modal: () => null }
+      }
       if (name === 'react') {
         return {
           createElement: () => null,
@@ -183,4 +186,14 @@ test('treats only a click inside a workspace row as a workspace-menu request', a
 test('spells the workspace menu entry in one place', async () => {
   const { hideMenuItemText } = await loadPlugin()
   assert.equal(hideMenuItemText(), '隐藏工作区')
+})
+
+test('spells the restore dialog copy in one place', async () => {
+  const { restoreDialogText } = await loadPlugin()
+  assert.deepEqual(restoreDialogText(), {
+    title: '已隐藏的工作区',
+    description: '这些工作区已从侧栏隐藏，恢复后重新显示。',
+    restore: '恢复',
+    close: '关闭',
+  })
 })

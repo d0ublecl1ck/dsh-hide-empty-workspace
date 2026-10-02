@@ -31,6 +31,7 @@ window.__ModuleLoader__.load({
   id: 'dsh-hide-empty-workspace',
   factory(require) {
     const React = require('react')
+    const { Button, Modal } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     const WORKSPACE_ROW_PREFIX = 'workspace:'
     const WORKSPACE_ROW_SELECTOR = '[data-row-key^="' + WORKSPACE_ROW_PREFIX + '"]'
@@ -192,6 +193,16 @@ window.__ModuleLoader__.load({
       return '隐藏工作区'
     }
 
+    /** Copy for the shipped-Modal restore dialog. Kept in one place so tests can pin it. */
+    function restoreDialogText() {
+      return {
+        title: '已隐藏的工作区',
+        description: '这些工作区已从侧栏隐藏，恢复后重新显示。',
+        restore: '恢复',
+        close: '关闭',
+      }
+    }
+
     function sameSet(left, right) {
       if (left.size !== right.size) return false
       for (const value of left) if (!right.has(value)) return false
@@ -306,20 +317,6 @@ window.__ModuleLoader__.load({
       lineHeight: '18px',
       color: 'var(--dsw-alias-label-warning, #d48806)',
     }
-    const PANEL_STYLE = {
-      position: 'absolute',
-      bottom: '100%',
-      left: '8px',
-      right: '8px',
-      maxHeight: '260px',
-      overflowY: 'auto',
-      padding: '4px',
-      border: '1px solid var(--dsw-alias-border-l3, #d9d9d9)',
-      borderRadius: 'var(--dsw-radius-md, 8px)',
-      background: 'var(--dsw-alias-bg-elevated, #ffffff)',
-      color: 'var(--dsw-alias-label-primary, #1a1a1a)',
-      boxShadow: '0 6px 20px rgba(0, 0, 0, 0.14)',
-    }
 
     /**
      * Slot component: owns the visible/hidden state, the row sync, the entry
@@ -334,7 +331,7 @@ window.__ModuleLoader__.load({
       const byId = useSessions((state) => state.byId)
 
       const [hidden, setHidden] = React.useState(() => loadHidden())
-      const [panelOpen, setPanelOpen] = React.useState(false)
+      const [restoreOpen, setRestoreOpen] = React.useState(false)
       const [markerWarning, setMarkerWarning] = React.useState(null)
       const hiddenRef = React.useRef(hidden)
       hiddenRef.current = hidden
@@ -432,6 +429,11 @@ window.__ModuleLoader__.load({
         [items, hidden],
       )
 
+      // Restoring the last entry closes the dialog instead of leaving an empty one open.
+      React.useEffect(() => {
+        if (restoreOpen && hiddenItems.length === 0) setRestoreOpen(false)
+      }, [restoreOpen, hiddenItems.length])
+
       const children = []
       if (markerWarning !== null) {
         children.push(React.createElement('div', {
@@ -441,27 +443,62 @@ window.__ModuleLoader__.load({
         }, markerWarningText()))
       }
       if (hiddenItems.length > 0) {
-        const label = panelOpen ? '收起已隐藏' : '已隐藏 ' + hiddenItems.length
         children.push(React.createElement('div', {
           key: 'foot',
-          style: { ...FOOT_STYLE, position: 'relative' },
+          style: FOOT_STYLE,
         },
         React.createElement('button', {
           type: 'button',
           style: { ...ENTRY_BUTTON_STYLE, color: 'var(--dsw-alias-label-secondary, #666)' },
-          onClick: () => setPanelOpen((open) => !open),
-        }, label),
-        panelOpen && React.createElement('div', { style: PANEL_STYLE }, hiddenItems.map((item) => React.createElement(
-          'button',
-          {
-            key: item.workspaceId,
-            type: 'button',
-            style: ENTRY_BUTTON_STYLE,
-            title: item.path,
-            onClick: () => restore(item.workspaceId),
+          onClick: () => setRestoreOpen(true),
+        }, '已隐藏 ' + hiddenItems.length)))
+      }
+      if (restoreOpen || hiddenItems.length > 0) {
+        const text = restoreDialogText()
+        children.push(React.createElement(Modal, {
+          key: 'restore-dialog',
+          open: restoreOpen,
+          onClose: () => setRestoreOpen(false),
+          title: text.title,
+          description: text.description,
+          closeLabel: text.close,
+          footer: React.createElement(Button, {
+            variant: 'primary',
+            onClick: () => setRestoreOpen(false),
+          }, text.close),
+        }, React.createElement('div', {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '320px',
+            overflowY: 'auto',
           },
-          '恢复 ' + (item.title ?? item.workspaceId),
-        )))))
+        }, hiddenItems.map((item) => React.createElement('div', {
+          key: item.workspaceId,
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            padding: '6px 0',
+          },
+        },
+        React.createElement('span', {
+          title: item.path,
+          style: {
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            fontSize: '14px',
+            color: 'var(--dsw-alias-label-primary, #1a1a1a)',
+          },
+        }, item.title ?? item.workspaceId),
+        React.createElement(Button, {
+          variant: 'outline',
+          size: 'sm',
+          onClick: () => restore(item.workspaceId),
+        }, text.restore))))))
       }
       return children.length === 0 ? null : React.createElement(React.Fragment, null, children)
     }
@@ -483,6 +520,7 @@ window.__ModuleLoader__.load({
         workspaceKeyFromRowKey,
         workspaceKeyFromTarget,
         hideMenuItemText,
+        restoreDialogText,
         applyRowVisibility,
         countWorkspaceRows,
         diagnoseRowMarkers,
