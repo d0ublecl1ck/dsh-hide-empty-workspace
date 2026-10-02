@@ -87,6 +87,16 @@ for (const file of testScript.match(/[\w./-]+\.mjs/g) ?? []) {
   if (!exists(file)) fail('package.json test script points at a missing file: ' + file)
 }
 
+// 6. The manifest and the changelog must agree on what is about to ship. Bumping
+// one and forgetting the other is invisible until a tag or a publish goes out —
+// 0.3.0 landed in CHANGELOG.md while package.json still said 0.2.0, and this gate
+// had nothing to say about it.
+const changelog = exists('CHANGELOG.md') ? read('CHANGELOG.md') : ''
+const newest = changelog.match(/^## (\d+\.\d+\.\d+)/m)
+if (newest === null) fail('CHANGELOG.md: no "## <x.y.z>" section to compare package.json against')
+else if (newest[1] !== pkg.version) fail('version drift: package.json says ' + pkg.version + ' but the newest CHANGELOG.md section is ' + newest[1])
+else pass('version matches the newest CHANGELOG.md section: ' + pkg.version)
+
 console.log('check-release: ' + root)
 for (const message of passes) console.log('  ok    ' + message)
 for (const message of failures) console.log('  FAIL  ' + message)
