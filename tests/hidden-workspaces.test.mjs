@@ -123,3 +123,42 @@ test('never hides the ungrouped bucket', async () => {
   const { effectiveHiddenSet } = await loadPlugin()
   assert.deepEqual([...effectiveHiddenSet(new Set(['']), undefined)], [''])
 })
+
+test('counts only workspace rows', async () => {
+  const { countWorkspaceRows } = await loadPlugin()
+  const rows = [
+    { key: 'workspace:w1' },
+    { key: 'workspace:w2' },
+    { key: 'session:s1' },
+    { key: 'empty' },
+  ]
+  const seen = []
+  const scope = {
+    querySelectorAll: (selector) => {
+      seen.push(selector)
+      return rows.filter((row) => row.key.startsWith('workspace:'))
+    },
+  }
+  assert.equal(countWorkspaceRows(scope), 2)
+  assert.deepEqual(seen, ['[data-row-key^="workspace:"]'])
+})
+
+test('reports a marker mismatch when workspaces exist but no workspace row does', async () => {
+  const { diagnoseRowMarkers } = await loadPlugin()
+  assert.deepEqual(diagnoseRowMarkers(2, 0), { workspaceCount: 2, matchedRowCount: 0 })
+})
+
+test('stays quiet while at least one workspace row is present, and without workspaces', async () => {
+  const { diagnoseRowMarkers } = await loadPlugin()
+  assert.equal(diagnoseRowMarkers(2, 1), null)
+  assert.equal(diagnoseRowMarkers(2, 2), null)
+  assert.equal(diagnoseRowMarkers(0, 0), null)
+  assert.equal(diagnoseRowMarkers(undefined, 0), null)
+})
+
+test('spells the mismatch warning in one place', async () => {
+  const { markerWarningText, markerWarningDetail } = await loadPlugin()
+  assert.equal(markerWarningText(), '⚠ 工作区行标记失配，插件未生效')
+  assert.match(markerWarningDetail(3), /3 个工作区/)
+  assert.match(markerWarningDetail(3), /data-row-key/)
+})

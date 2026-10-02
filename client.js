@@ -22,7 +22,10 @@ window.__ModuleLoader__.load({
     const React = require('react')
 
     const WORKSPACE_ROW_PREFIX = 'workspace:'
+    const WORKSPACE_ROW_SELECTOR = '[data-row-key^="' + WORKSPACE_ROW_PREFIX + '"]'
     const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
+    /** Grace period before the row-marker self-check runs, so a slow first paint is not read as a failure. */
+    const MARKER_CHECK_DELAY_MS = 1500
 
     function asSet(value) {
       if (value instanceof Set) return value
@@ -98,11 +101,44 @@ window.__ModuleLoader__.load({
     /** Toggle `display` on the shipped Workspace rows so they match `hidden`. */
     function applyRowVisibility(hidden, root) {
       const scope = root ?? document
-      const selector = '[data-row-key^="' + WORKSPACE_ROW_PREFIX + '"]'
-      for (const row of scope.querySelectorAll(selector)) {
+      for (const row of scope.querySelectorAll(WORKSPACE_ROW_SELECTOR)) {
         const key = (row.getAttribute('data-row-key') ?? '').slice(WORKSPACE_ROW_PREFIX.length)
         row.style.display = hidden.has(key) ? 'none' : ''
       }
+    }
+
+    /** How many shipped Workspace rows the current DOM exposes. */
+    function countWorkspaceRows(root) {
+      const scope = root ?? document
+      return scope.querySelectorAll(WORKSPACE_ROW_SELECTOR).length
+    }
+
+    /**
+     * Silent-failure probe. Everything here hangs off the shipped row marker, so
+     * "workspaces exist but not a single Workspace row is in the DOM" means the
+     * sidebar was renamed, replaced, or taken over by another plugin: this
+     * plugin has become a no-op and the user would otherwise never be told.
+     *
+     * Only the zero-row case counts. A long list may be virtualised, so a
+     * partial count is not evidence of anything.
+     *
+     * @returns `null` when healthy, otherwise the mismatch to report.
+     */
+    function diagnoseRowMarkers(workspaceCount, matchedRowCount) {
+      const expected = Number.isFinite(workspaceCount) ? workspaceCount : 0
+      if (expected <= 0) return null
+      if (Number(matchedRowCount) > 0) return null
+      return { workspaceCount: expected, matchedRowCount: 0 }
+    }
+
+    /** Footer copy for a marker mismatch. Kept in one place so tests can pin it. */
+    function markerWarningText() {
+      return '⚠ 工作区行标记失配，插件未生效'
+    }
+
+    function markerWarningDetail(workspaceCount) {
+      return '当前有 ' + workspaceCount + ' 个工作区，但页面里找不到任何 [data-row-key^="workspace:"] 行。'
+        + '通常是 DSH 侧栏改版，或另一个接管侧栏的插件所致；自动隐藏、右键隐藏与恢复入口都不会生效。'
     }
 
     function sameSet(left, right) {
@@ -153,6 +189,12 @@ window.__ModuleLoader__.load({
       cursor: 'pointer',
     }
     const FOOT_STYLE = { padding: '4px 8px', fontSize: '12px', lineHeight: '18px' }
+    const WARNING_STYLE = {
+      padding: '4px 8px',
+      fontSize: '12px',
+      lineHeight: '18px',
+      color: 'var(--dsw-alias-label-warning, #d48806)',
+    }
     const PANEL_STYLE = {
       position: 'absolute',
       bottom: '100%',
@@ -182,6 +224,7 @@ window.__ModuleLoader__.load({
       const [hidden, setHidden] = React.useState(() => loadHidden())
       const [menu, setMenu] = React.useState(null)
       const [panelOpen, setPanelOpen] = React.useState(false)
+      const [markerWarning, setMarkerWarning] = React.useState(null)
       const hiddenRef = React.useRef(hidden)
       hiddenRef.current = hidden
       const prevCountsRef = React.useRef(undefined)
@@ -221,6 +264,17 @@ window.__ModuleLoader__.load({
           if (frame !== 0) cancelAnimationFrame(frame)
         }
       }, [effective])
+
+      // Self-check: if the shipped row marker is gone, say so instead of doing nothing.
+      React.useEffect(() => {
+        const timer = setTimeout(() => {
+          setMarkerWarning(diagnoseRowMarkers(
+            Array.isArray(items) ? items.length : 0,
+            countWorkspaceRows(),
+          ))
+        }, MARKER_CHECK_DELAY_MS)
+        return () => clearTimeout(timer)
+      }, [items, effective])
 
       React.useEffect(() => {
         const onContextMenu = (event) => {
@@ -262,6 +316,13 @@ window.__ModuleLoader__.load({
       )
 
       const children = []
+      if (markerWarning !== null) {
+        children.push(React.createElement('div', {
+          key: 'marker-warning',
+          style: WARNING_STYLE,
+          title: markerWarningDetail(markerWarning.workspaceCount),
+        }, markerWarningText()))
+      }
       if (menu !== null) {
         children.push(React.createElement('div', {
           key: 'menu',
@@ -316,6 +377,10 @@ window.__ModuleLoader__.load({
         currentWorkspaceKey,
         effectiveHiddenSet,
         applyRowVisibility,
+        countWorkspaceRows,
+        diagnoseRowMarkers,
+        markerWarningText,
+        markerWarningDetail,
       },
     }
   },
