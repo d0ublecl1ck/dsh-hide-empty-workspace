@@ -162,3 +162,25 @@ test('spells the mismatch warning in one place', async () => {
   assert.match(markerWarningDetail(3), /3 个工作区/)
   assert.match(markerWarningDetail(3), /data-row-key/)
 })
+
+test('reads the workspace id out of a row marker, and nothing else', async () => {
+  const { workspaceKeyFromRowKey } = await loadPlugin()
+  assert.equal(workspaceKeyFromRowKey('workspace:w1'), 'w1')
+  assert.equal(workspaceKeyFromRowKey('workspace:'), undefined)
+  assert.equal(workspaceKeyFromRowKey('session:s1'), undefined)
+  assert.equal(workspaceKeyFromRowKey(undefined), undefined)
+})
+
+test('treats only a click inside a workspace row as a workspace-menu request', async () => {
+  const { workspaceKeyFromTarget } = await loadPlugin()
+  const target = (rowKey) => ({ closest: () => (rowKey === undefined ? null : { getAttribute: () => rowKey }) })
+  assert.equal(workspaceKeyFromTarget(target('workspace:w1')), 'w1')
+  assert.equal(workspaceKeyFromTarget(target('session:s1')), undefined)
+  assert.equal(workspaceKeyFromTarget(target(undefined)), undefined)
+  assert.equal(workspaceKeyFromTarget(null), undefined)
+})
+
+test('spells the workspace menu entry in one place', async () => {
+  const { hideMenuItemText } = await loadPlugin()
+  assert.equal(hideMenuItemText(), '隐藏工作区')
+})

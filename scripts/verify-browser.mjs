@@ -4,15 +4,23 @@
  *
  * Unit tests cover the pure logic only. They cannot tell you whether the
  * WorkspaceHider slot ever mounts, whether the shipped sidebar still answers to
- * `data-row-key^="workspace:"`, or whether a right-click really opens the hide
- * menu. This script answers exactly those questions against a running DSH
- * instance, changes nothing it does not restore, and can also emit the
+ * data-row-key^="workspace:", whether the shipped Workspace row menu accepts the
+ * entry this plugin appends, or whether a real mouse click on that entry hides
+ * the workspace. This script answers exactly those questions against a running
+ * DSH instance, changes nothing it does not restore, and can also emit the
  * screenshots (and a GIF) the README shows.
+ *
+ * Every user gesture goes through CDP Input.dispatchMouseEvent, never
+ * element.click(). That is deliberate: an earlier build opened a plugin-owned
+ * context menu and dismissed it on pointerdown, so a real mouse press unmounted
+ * the button before its click could fire and the action did nothing, while a
+ * programmatic element.click() (which never emits pointerdown) stayed green. A
+ * check that does not reproduce the user's input sequence is not a check.
  *
  * It authenticates the way the shell does: the browser session cookie is a
  * v1.<base64url payload>.<base64url HMAC-SHA256> value signed with the
- * `client-connection/browser-session` credential secret, and its name is
- * `dsh-auth-` + base64url(sha256(authority)).
+ * client-connection/browser-session credential secret, and its name is
+ * dsh-auth- + base64url(sha256(authority)).
  *
  * Usage:
  *   node scripts/verify-browser.mjs
@@ -37,22 +45,21 @@ const DEFAULTS = {
 }
 
 /**
- * A screenshot of a live instance is a screenshot of somebody's real work: 23
- * real workspace names, real session titles, and the account balance in the
- * composer footer. Public showcase images must not carry any of that.
+ * A screenshot of a live instance is a screenshot of somebody's real work: real
+ * workspace names, real session titles, and the account balance in the composer
+ * footer. Public showcase images must not carry any of that.
  *
- * Redaction keeps the geometry and everything this plugin draws (its context
- * menu, its 「已隐藏 N」 footer) but replaces the text of every shipped sidebar
- * row with a neutral bar, and the capture is clipped to the sidebar column so
- * the main pane never enters the frame. `--no-redact` skips this for local use.
+ * Redaction keeps the geometry and everything this plugin draws (its appended
+ * row-menu entry, its 「已隐藏 N」 footer) but replaces the text of every shipped
+ * sidebar row with a neutral bar, and the capture is clipped to the sidebar
+ * column so the main pane never enters the frame. --no-redact skips this for
+ * local use.
  */
-const REDACTION_CSS = `[data-row-key] * { color: transparent !important; text-shadow: none !important; }
-[data-row-key] { position: relative !important; }
-[data-row-key]::after {
-  content: ''; position: absolute; left: 10px; right: 24px; top: 50%;
-  height: 9px; margin-top: -4.5px; border-radius: 4.5px;
-  background: rgba(120, 120, 120, 0.35); pointer-events: none;
-}`
+const REDACTION_CSS = [
+  '[data-row-key] * { color: transparent !important; text-shadow: none !important; }',
+  '[data-row-key] { position: relative !important; }',
+  "[data-row-key]::after { content: ''; position: absolute; left: 10px; right: 24px; top: 50%; height: 9px; margin-top: -4.5px; border-radius: 4.5px; background: rgba(120, 120, 120, 0.35); pointer-events: none; }",
+].join('\n')
 
 /** Sidebar column only; the width the redaction and the clip agree on. */
 const CAPTURE_WIDTH = 320
@@ -175,22 +182,27 @@ async function evaluate(cdp, sessionId, expression, awaitPromise = false) {
 }
 
 const ROW_SELECTOR = '[data-row-key^="workspace:"]'
+const ROW_KEY_ATTRIBUTE = 'data-row-key'
+const MENU_ITEM_SELECTOR = '[role="menu"] [role="menuitem"]'
+const MENU_ITEM_TEXT = '隐藏工作区'
+const MENU_SELECTOR = '[role="menu"]'
+const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
+const RAIL_TOGGLE_SELECTOR = '[aria-label="打开侧边栏"], [aria-label="Open sidebar"]'
 
 const probeExpression = `(() => {
   const rows = [...document.querySelectorAll('[data-row-key^="workspace:"]')]
-  const all = [...document.querySelectorAll('[data-row-key]')].map((row) => row.getAttribute('data-row-key'))
+  const menuItems = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((item) => item.textContent.trim())
   const body = document.body ? document.body.innerText : ''
   return {
     readyState: document.readyState,
     url: location.href,
     rowCount: rows.length,
-    rowKeys: all,
     hiddenRows: rows.filter((row) => row.style.display === 'none').length,
     markerWarning: body.includes('工作区行标记失配'),
-    hideMenu: body.includes('隐藏工作区'),
+    menuOpen: document.querySelector('[role="menu"]') !== null,
+    menuItems,
+    menuEntry: menuItems.includes('隐藏工作区'),
     hiddenFooter: (body.match(/已隐藏 (\\d+)/) ?? [])[1] ?? null,
-    restored: false,
-    stored: (() => { try { return localStorage.getItem('dsh-hide-empty-workspace.hidden.v1') } catch { return null } })(),
     storedIds: (() => {
       try {
         const parsed = JSON.parse(localStorage.getItem('dsh-hide-empty-workspace.hidden.v1') ?? '[]')
@@ -279,24 +291,19 @@ async function main() {
     // The sidebar can boot in its rail (collapsed) form, where this plugin is not mounted at all.
     let state = await evaluate(cdp, sessionId, probeExpression)
     if (state.rowCount === 0) {
-      await evaluate(cdp, sessionId, `(() => {
-        const toggle = document.querySelector('[aria-label="打开侧边栏"], [aria-label="Open sidebar"]')
-        if (toggle) toggle.click()
-        return true
-      })()`)
+      const railToggle = await evaluate(cdp, sessionId, '(() => { const toggle = document.querySelector(' + JSON.stringify(RAIL_TOGGLE_SELECTOR) + '); if (!toggle) return null; const rect = toggle.getBoundingClientRect(); return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } })()')
+      if (railToggle !== null) {
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: railToggle.x, y: railToggle.y, button: 'none', buttons: 0 }, sessionId)
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: railToggle.x, y: railToggle.y, button: 'left', buttons: 1, clickCount: 1 }, sessionId)
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: railToggle.x, y: railToggle.y, button: 'left', buttons: 0, clickCount: 1 }, sessionId)
+      }
       await sleep(1000)
     }
 
     mkdirSync(config.shots, { recursive: true })
 
     if (config.redact) {
-      await evaluate(cdp, sessionId, `(() => {
-        const style = document.createElement('style')
-        style.id = 'dsh-hew-redact'
-        style.textContent = ${JSON.stringify(REDACTION_CSS)}
-        document.head.appendChild(style)
-        return true
-      })()`)
+      await evaluate(cdp, sessionId, '(() => { const style = document.createElement("style"); style.id = "dsh-hew-redact"; style.textContent = ' + JSON.stringify(REDACTION_CSS) + '; document.head.appendChild(style); return true })()')
     }
 
     state = await waitFor(cdp, sessionId, (value) => value.rowCount > 0, 'shipped workspace rows')
@@ -307,58 +314,69 @@ async function main() {
 
     await screenshot(cdp, sessionId, join(config.shots, '1-workspaces.png'))
 
-    const targetKey = await evaluate(cdp, sessionId, `(() => {
-      const row = document.querySelector('[data-row-key^="workspace:"]')
-      if (!row) return null
-      const rect = row.getBoundingClientRect()
-      row.dispatchEvent(new MouseEvent('contextmenu', {
-        bubbles: true, cancelable: true,
-        clientX: rect.left + 20, clientY: rect.top + rect.height / 2,
-      }))
-      return row.getAttribute('data-row-key')
-    })()`)
-    if (targetKey === null) throw new Error('no workspace row to right-click')
-    await sleep(400)
+    /** Viewport-centre of the first element an expression yields, or null. */
+    const boxOf = (expression) => evaluate(cdp, sessionId, '(() => { const element = ' + expression + '; if (!element) return null; const rect = element.getBoundingClientRect(); if (rect.width === 0 && rect.height === 0) return null; return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } })()')
 
+    const hoverAt = (box) => cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y, button: 'none', buttons: 0 }, sessionId)
+
+    /** A real left-button press/release, the sequence a user's mouse produces. */
+    const clickAt = async (box) => {
+      await hoverAt(box)
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', buttons: 1, clickCount: 1 }, sessionId)
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', buttons: 0, clickCount: 1 }, sessionId)
+    }
+
+    const rowExpression = 'document.querySelectorAll(' + JSON.stringify(ROW_SELECTOR) + ')'
+
+    /** Hover the Nth Workspace row, then open its "..." menu with a real click. */
+    const openRowMenu = async (index) => {
+      const row = await boxOf(rowExpression + '[' + index + ']')
+      if (row === null) return false
+      await hoverAt(row)
+      await sleep(250)
+      const button = await boxOf(rowExpression + '[' + index + '] && ' + rowExpression + '[' + index + '].querySelector("button")')
+      if (button === null) return false
+      await clickAt(button)
+      await sleep(600)
+      return true
+    }
+
+    /** Real click on a shipped menu entry, found by its visible label. */
+    const clickMenuItem = async (label) => {
+      const item = await boxOf('[...document.querySelectorAll(' + JSON.stringify(MENU_ITEM_SELECTOR) + ')].find((entry) => entry.textContent.trim() === ' + JSON.stringify(label) + ')')
+      if (item === null) return false
+      await clickAt(item)
+      await sleep(500)
+      return true
+    }
+
+    // The shipped Workspace row menu is not a slot, so the plugin appends its own
+    // entry. Open that menu with the real gesture and prove the entry is inside it.
+    await openRowMenu(0)
     const opened = await evaluate(cdp, sessionId, probeExpression)
-    if (opened.hideMenu) pass('right-click on ' + targetKey + ' opened the plugin\'s 「隐藏工作区」 entry')
-    else fail('right-click did not render 「隐藏工作区」: the footer slot is not mounted')
+    if (opened.menuEntry) pass('the shipped Workspace row menu carries the 「' + MENU_ITEM_TEXT + '」 entry')
+    else fail('the row menu opened but has no 「' + MENU_ITEM_TEXT + '」 entry (items: ' + JSON.stringify(opened.menuItems) + ')')
     await screenshot(cdp, sessionId, join(config.shots, '2-hide-menu.png'))
 
-    // Dismiss, then exercise the manual hide path for real and put it back.
-    await evaluate(cdp, sessionId, 'document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })); true')
-    await sleep(300)
-
     const before = await evaluate(cdp, sessionId, probeExpression)
-    const rowKeys = await evaluate(cdp, sessionId, `[...document.querySelectorAll('[data-row-key^="workspace:"]')].map((row) => row.getAttribute('data-row-key')).slice(0, 2)`)
+    const rowKeys = await evaluate(cdp, sessionId, '[...document.querySelectorAll(' + JSON.stringify(ROW_SELECTOR) + ')].map((row) => row.getAttribute(' + JSON.stringify(ROW_KEY_ATTRIBUTE) + ')).slice(0, 2)')
     const targets = rowKeys.map((key) => key.slice('workspace:'.length))
 
-    /** Right-click the Nth workspace row and choose 「隐藏工作区」. */
-    const hideRow = async (index) => {
-      await evaluate(cdp, sessionId, `(() => {
-        const row = document.querySelectorAll('[data-row-key^="workspace:"]')[${index}]
-        if (!row) return false
-        const rect = row.getBoundingClientRect()
-        row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 20, clientY: rect.top + rect.height / 2 }))
-        return true
-      })()`)
-      await sleep(300)
-      await evaluate(cdp, sessionId, `(() => {
-        const item = [...document.querySelectorAll('button')].find((button) => button.textContent === '隐藏工作区')
-        if (item) item.click()
-        return true
-      })()`)
-      await sleep(400)
-    }
+    // The exact gesture the old pointerdown-dismiss bug turned into a no-op.
+    if (await clickMenuItem(MENU_ITEM_TEXT)) pass('a real mouse press/release on the entry ran the action')
+    else fail('could not press/release the 「' + MENU_ITEM_TEXT + '」 entry with a real mouse')
+    const afterFirstHide = await evaluate(cdp, sessionId, probeExpression)
+    if (!afterFirstHide.menuOpen) pass('the appended entry closes the shipped menu it lives in')
+    else fail('the shipped menu stayed open after the appended entry ran')
 
     // Two hides, because the workspace currently in use is documented to stay
     // visible even when hidden; with two hidden, at least one must be display:none.
-    await hideRow(0)
-    await hideRow(1)
+    await openRowMenu(1)
+    await clickMenuItem(MENU_ITEM_TEXT)
 
     const afterHide = await evaluate(cdp, sessionId, probeExpression)
     const recorded = targets.filter((id) => afterHide.storedIds.includes(id))
-    if (recorded.length === 2) pass('「隐藏工作区」 recorded both workspaces in localStorage: ' + targets.join(', '))
+    if (recorded.length === 2) pass('「' + MENU_ITEM_TEXT + '」 recorded both workspaces in localStorage: ' + targets.join(', '))
     else fail('only ' + recorded.length + '/2 hides were persisted (expected ' + targets.join(', ') + ', stored ' + JSON.stringify(afterHide.storedIds) + ')')
     if (afterHide.hiddenRows >= 1) pass('display:none actually reached the shipped rows (' + afterHide.hiddenRows + ' hidden, ' + (2 - afterHide.hiddenRows) + ' kept as the workspace in use)')
     else fail('no workspace row became display:none after two hides')
@@ -366,21 +384,18 @@ async function main() {
     else fail('no 「已隐藏 N」 restore entry appeared')
     await screenshot(cdp, sessionId, join(config.shots, '3-hidden.png'))
 
-    // Restore everything, and prove the stored set came back to what it was.
+    // Restore everything with real clicks, and prove the stored set came back.
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const done = await evaluate(cdp, sessionId, `(() => {
-        const toggle = [...document.querySelectorAll('button')].find((button) => /^已隐藏 /.test(button.textContent))
-        if (toggle) toggle.click()
-        return true
-      })()`)
-      await sleep(300)
-      const remaining = await evaluate(cdp, sessionId, `(() => {
-        const restore = [...document.querySelectorAll('button')].filter((button) => /^恢复 /.test(button.textContent))
-        for (const button of restore) button.click()
-        return restore.length
-      })()`)
-      await sleep(350)
-      if (remaining === 0) break
+      const toggle = await boxOf('[...document.querySelectorAll("button")].find((button) => /^已隐藏 /.test(button.textContent))')
+      if (toggle !== null) { await clickAt(toggle); await sleep(350) }
+      for (;;) {
+        const restoreButton = await boxOf('[...document.querySelectorAll("button")].find((button) => /^恢复 /.test(button.textContent))')
+        if (restoreButton === null) break
+        await clickAt(restoreButton)
+        await sleep(350)
+      }
+      const left = await evaluate(cdp, sessionId, '[...document.querySelectorAll("button")].filter((button) => /^恢复 /.test(button.textContent)).length')
+      if (left === 0) break
     }
 
     const afterRestore = await evaluate(cdp, sessionId, probeExpression)

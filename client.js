@@ -1,7 +1,7 @@
 /**
  * Browser half: hide a sidebar Workspace group only at the moment its last
- * live (non-archived) Session disappears, plus an explicit right-click
- * "hide this workspace" action for every other case.
+ * live (non-archived) Session disappears, plus a manual "hide this workspace"
+ * entry appended to the Workspace row's own "..." action menu.
  *
  * Rationale: hiding on "has no live session" alone would hide a Workspace the
  * instant it is added (a fresh Workspace starts with zero Sessions). Instead the
@@ -10,11 +10,22 @@
  * Session. Manual hides are remembered until the user restores them or until a
  * live Session appears again.
  *
- * The shipped sidebar browser renders one `[data-row-key="workspace:<id>"]` row
- * per Workspace. This plugin never replaces that UI: an invisible host
- * component registered into a spare list slot subscribes to the standard
- * `useWorkspaces` / `useSessions` root hooks and only toggles `display` on the
- * shipped rows.
+ * The shipped sidebar renders one `[data-row-key="workspace:<id>"]` row per
+ * Workspace, and its row menu is NOT a slot: there is no extension point for a
+ * Workspace-row action, so this plugin appends one entry to that menu's DOM
+ * instead (cloning the shipped item classes, so no hashed class name is
+ * hardcoded). The menu is a portal directly under `document.body`.
+ *
+ * Closing that menu is the plugin's job too: the entry was not rendered by the
+ * menu's own React tree, so it cannot use the menu's `useMenuOpenState` hook.
+ * It dispatches the same Escape keydown the shipped menu already listens for.
+ *
+ * Self-inflicted failure this design removes: an earlier version opened a
+ * plugin-owned context menu on `contextmenu` and dismissed it on any
+ * `pointerdown`. A real mouse click therefore dismissed the menu on
+ * pointerdown and the following `click` never reached the (already unmounted)
+ * entry, so "hide this workspace" did nothing. Programmatic `element.click()`
+ * never emits pointerdown, which is why the old browser check stayed green.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-hide-empty-workspace',
@@ -23,9 +34,22 @@ window.__ModuleLoader__.load({
 
     const WORKSPACE_ROW_PREFIX = 'workspace:'
     const WORKSPACE_ROW_SELECTOR = '[data-row-key^="' + WORKSPACE_ROW_PREFIX + '"]'
+    const ANY_ROW_SELECTOR = '[data-row-key]'
+    const ROW_KEY_ATTRIBUTE = 'data-row-key'
+    const SHIPPED_MENU_SELECTOR = '[role="menu"]'
+    const SHIPPED_MENU_ITEM_SELECTOR = '[role="menuitem"]'
+    /** Marks our appended entry so re-injection after a React re-render is a no-op. */
+    const MENU_ITEM_FLAG = 'data-dsh-hew-menu-item'
     const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
     /** Grace period before the row-marker self-check runs, so a slow first paint is not read as a failure. */
     const MARKER_CHECK_DELAY_MS = 1500
+
+    /** Eye-off glyph for the appended menu entry; static markup, no user input. */
+    const HIDE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" stroke-width="1">'
+      + '<path d="M1.7 8C3.2 5.4 5.4 4 8 4C10.6 4 12.8 5.4 14.3 8C12.8 10.6 10.6 12 8 12C5.4 12 3.2 10.6 1.7 8Z" stroke="currentColor"/>'
+      + '<path d="M6.2 8C6.2 8.99 7.01 9.8 8 9.8C8.99 9.8 9.8 8.99 9.8 8C9.8 7.01 8.99 6.2 8 6.2C7.01 6.2 6.2 7.01 6.2 8Z" stroke="currentColor"/>'
+      + '<path d="M2.5 13.5L13.5 2.5" stroke="currentColor"/>'
+      + '</svg>'
 
     function asSet(value) {
       if (value instanceof Set) return value
@@ -98,12 +122,34 @@ window.__ModuleLoader__.load({
       return next
     }
 
+    /**
+     * Workspace id carried by a `data-row-key` value, or `undefined` for any
+     * other row (Session rows, the Ungrouped bucket, malformed markers).
+     */
+    function workspaceKeyFromRowKey(rowKey) {
+      if (typeof rowKey !== 'string' || !rowKey.startsWith(WORKSPACE_ROW_PREFIX)) return undefined
+      const key = rowKey.slice(WORKSPACE_ROW_PREFIX.length)
+      return key === '' ? undefined : key
+    }
+
+    /**
+     * Workspace id of the row that owns the clicked element, if any.
+     *
+     * Workspace rows do not nest other rows, so the nearest `[data-row-key]`
+     * is the only row that can own the click; a Session-row click resolves to
+     * a `session:` key and is therefore ignored.
+     */
+    function workspaceKeyFromTarget(target) {
+      const row = target?.closest?.(ANY_ROW_SELECTOR)
+      return workspaceKeyFromRowKey(row?.getAttribute?.(ROW_KEY_ATTRIBUTE))
+    }
+
     /** Toggle `display` on the shipped Workspace rows so they match `hidden`. */
     function applyRowVisibility(hidden, root) {
       const scope = root ?? document
       for (const row of scope.querySelectorAll(WORKSPACE_ROW_SELECTOR)) {
-        const key = (row.getAttribute('data-row-key') ?? '').slice(WORKSPACE_ROW_PREFIX.length)
-        row.style.display = hidden.has(key) ? 'none' : ''
+        const key = workspaceKeyFromRowKey(row.getAttribute(ROW_KEY_ATTRIBUTE))
+        row.style.display = key !== undefined && hidden.has(key) ? 'none' : ''
       }
     }
 
@@ -138,7 +184,12 @@ window.__ModuleLoader__.load({
 
     function markerWarningDetail(workspaceCount) {
       return '当前有 ' + workspaceCount + ' 个工作区，但页面里找不到任何 [data-row-key^="workspace:"] 行。'
-        + '通常是 DSH 侧栏改版，或另一个接管侧栏的插件所致；自动隐藏、右键隐藏与恢复入口都不会生效。'
+        + '通常是 DSH 侧栏改版，或另一个接管侧栏的插件所致；自动隐藏、行菜单隐藏与恢复入口都不会生效。'
+    }
+
+    /** Label of the entry this plugin appends to the shipped Workspace row menu. */
+    function hideMenuItemText() {
+      return '隐藏工作区'
     }
 
     function sameSet(left, right) {
@@ -164,18 +215,78 @@ window.__ModuleLoader__.load({
       } catch (error) { /* storage unavailable: keep the in-memory set only */ }
     }
 
-    const MENU_STYLE = {
-      position: 'fixed',
-      zIndex: 1000,
-      minWidth: '150px',
-      padding: '4px',
-      border: '1px solid var(--dsw-alias-border-l3, #d9d9d9)',
-      borderRadius: 'var(--dsw-radius-md, 8px)',
-      background: 'var(--dsw-alias-bg-elevated, #ffffff)',
-      color: 'var(--dsw-alias-label-primary, #1a1a1a)',
-      boxShadow: '0 6px 20px rgba(0, 0, 0, 0.14)',
+    /**
+     * Build the menu entry, cloning the shipped item's classes from the menu
+     * that is currently open. Nothing here hardcodes a hashed CSS-module name,
+     * so a restyle keeps the entry looking native.
+     */
+    function buildHideMenuItem(scope, workspaceKey, onHide) {
+      const doc = scope ?? document
+      const sampleItem = doc.querySelector(SHIPPED_MENU_ITEM_SELECTOR)
+      const sampleWrap = sampleItem?.parentElement ?? null
+      const wrap = doc.createElement('div')
+      if (sampleWrap?.className) wrap.className = sampleWrap.className
+      wrap.setAttribute(MENU_ITEM_FLAG, workspaceKey)
+
+      const button = doc.createElement('button')
+      button.type = 'button'
+      button.setAttribute('role', 'menuitem')
+      if (sampleItem?.className) button.className = sampleItem.className
+
+      const iconSlot = sampleItem?.querySelector('span')
+      const icon = doc.createElement('span')
+      if (iconSlot?.className) icon.className = iconSlot.className
+      icon.innerHTML = HIDE_ICON_SVG
+
+      const labelSlot = sampleItem?.querySelector('span:last-child')
+      const label = doc.createElement('span')
+      if (labelSlot?.className) label.className = labelSlot.className
+      label.textContent = hideMenuItemText()
+
+      button.appendChild(icon)
+      button.appendChild(label)
+      button.addEventListener('click', (event) => {
+        event.preventDefault()
+        onHide(workspaceKey)
+      })
+      wrap.appendChild(button)
+      return wrap
     }
-    const MENU_ITEM_STYLE = {
+
+    /**
+     * Append the hide entry to the shipped Workspace row menu when one is open.
+     * Returns `false` while no menu is in the DOM, so the caller keeps waiting.
+     */
+    function injectHideMenuItem(scope, workspaceKey, onHide) {
+      const doc = scope ?? document
+      const menu = doc.querySelector(SHIPPED_MENU_SELECTOR)
+      if (menu === null) return false
+      if (menu.querySelector('[' + MENU_ITEM_FLAG + ']') !== null) return true
+      const viewport = menu.querySelector('[class*="viewport"]') ?? menu
+      viewport.appendChild(buildHideMenuItem(doc, workspaceKey, onHide))
+      return true
+    }
+
+    /**
+     * Close the shipped menu the way its own keyboard handling does. The entry
+     * lives outside the menu's React tree, so it cannot use `useMenuOpenState`;
+     * Escape is the same signal a keyboard user would send.
+     */
+    function closeShippedMenu(scope) {
+      const doc = scope ?? document
+      if (typeof doc.defaultView?.KeyboardEvent !== 'function' && typeof KeyboardEvent !== 'function') return
+      const KeyboardEventCtor = doc.defaultView?.KeyboardEvent ?? KeyboardEvent
+      const target = doc.activeElement ?? doc.body
+      if (!target) return
+      target.dispatchEvent(new KeyboardEventCtor('keydown', {
+        key: 'Escape',
+        code: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      }))
+    }
+
+    const ENTRY_BUTTON_STYLE = {
       display: 'block',
       width: '100%',
       padding: '6px 10px',
@@ -211,8 +322,9 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Slot component: owns the visible/hidden state, the row sync, the
-     * right-click hide menu and the hidden-workspace restore entry.
+     * Slot component: owns the visible/hidden state, the row sync, the entry
+     * appended to the shipped Workspace row menu, and the hidden-workspace
+     * restore entry.
      */
     function WorkspaceHider(props) {
       const useWorkspaces = typeof props.useWorkspaces === 'function' ? props.useWorkspaces : () => undefined
@@ -222,12 +334,12 @@ window.__ModuleLoader__.load({
       const byId = useSessions((state) => state.byId)
 
       const [hidden, setHidden] = React.useState(() => loadHidden())
-      const [menu, setMenu] = React.useState(null)
       const [panelOpen, setPanelOpen] = React.useState(false)
       const [markerWarning, setMarkerWarning] = React.useState(null)
       const hiddenRef = React.useRef(hidden)
       hiddenRef.current = hidden
       const prevCountsRef = React.useRef(undefined)
+      const hideRef = React.useRef(() => {})
 
       const workspaces = React.useMemo(() => ({ items }), [items])
       const sessions = React.useMemo(() => ({ byId }), [byId])
@@ -276,27 +388,6 @@ window.__ModuleLoader__.load({
         return () => clearTimeout(timer)
       }, [items, effective])
 
-      React.useEffect(() => {
-        const onContextMenu = (event) => {
-          const row = event.target?.closest?.('[data-row-key^="' + WORKSPACE_ROW_PREFIX + '"]')
-          if (!row) {
-            setMenu(null)
-            return
-          }
-          const key = (row.getAttribute('data-row-key') ?? '').slice(WORKSPACE_ROW_PREFIX.length)
-          if (key === '') return
-          event.preventDefault()
-          setMenu({ key, x: event.clientX, y: event.clientY })
-        }
-        const onPointerDown = () => setMenu(null)
-        document.addEventListener('contextmenu', onContextMenu, true)
-        document.addEventListener('pointerdown', onPointerDown, true)
-        return () => {
-          document.removeEventListener('contextmenu', onContextMenu, true)
-          document.removeEventListener('pointerdown', onPointerDown, true)
-        }
-      }, [])
-
       const hide = (key) => {
         const next = new Set(hiddenRef.current)
         next.add(key)
@@ -309,6 +400,32 @@ window.__ModuleLoader__.load({
         setHidden(next)
         persistHidden(next)
       }
+      hideRef.current = hide
+
+      // Remember which Workspace row was clicked, then append the hide entry to
+      // whatever menu the shipped row button opens. The menu is a portal, so a
+      // MutationObserver on body is the only reliable place to catch it.
+      React.useEffect(() => {
+        let pendingKey = null
+        const remember = (event) => {
+          pendingKey = workspaceKeyFromTarget(event.target)
+        }
+        const refresh = () => {
+          if (pendingKey === null) return
+          const attached = injectHideMenuItem(document, pendingKey, (key) => {
+            hideRef.current(key)
+            closeShippedMenu(document)
+          })
+          if (!attached) pendingKey = null
+        }
+        document.addEventListener('click', remember, true)
+        const observer = new MutationObserver(refresh)
+        observer.observe(document.body, { childList: true, subtree: true })
+        return () => {
+          document.removeEventListener('click', remember, true)
+          observer.disconnect()
+        }
+      }, [])
 
       const hiddenItems = React.useMemo(
         () => (Array.isArray(items) ? items : []).filter((item) => hidden.has(item.workspaceId)),
@@ -323,19 +440,6 @@ window.__ModuleLoader__.load({
           title: markerWarningDetail(markerWarning.workspaceCount),
         }, markerWarningText()))
       }
-      if (menu !== null) {
-        children.push(React.createElement('div', {
-          key: 'menu',
-          style: { ...MENU_STYLE, left: menu.x + 'px', top: menu.y + 'px' },
-        }, React.createElement('button', {
-          type: 'button',
-          style: MENU_ITEM_STYLE,
-          onClick: () => {
-            hide(menu.key)
-            setMenu(null)
-          },
-        }, '隐藏工作区')))
-      }
       if (hiddenItems.length > 0) {
         const label = panelOpen ? '收起已隐藏' : '已隐藏 ' + hiddenItems.length
         children.push(React.createElement('div', {
@@ -344,7 +448,7 @@ window.__ModuleLoader__.load({
         },
         React.createElement('button', {
           type: 'button',
-          style: { ...MENU_ITEM_STYLE, color: 'var(--dsw-alias-label-secondary, #666)' },
+          style: { ...ENTRY_BUTTON_STYLE, color: 'var(--dsw-alias-label-secondary, #666)' },
           onClick: () => setPanelOpen((open) => !open),
         }, label),
         panelOpen && React.createElement('div', { style: PANEL_STYLE }, hiddenItems.map((item) => React.createElement(
@@ -352,7 +456,7 @@ window.__ModuleLoader__.load({
           {
             key: item.workspaceId,
             type: 'button',
-            style: MENU_ITEM_STYLE,
+            style: ENTRY_BUTTON_STYLE,
             title: item.path,
             onClick: () => restore(item.workspaceId),
           },
@@ -376,6 +480,9 @@ window.__ModuleLoader__.load({
         stepHidden,
         currentWorkspaceKey,
         effectiveHiddenSet,
+        workspaceKeyFromRowKey,
+        workspaceKeyFromTarget,
+        hideMenuItemText,
         applyRowVisibility,
         countWorkspaceRows,
         diagnoseRowMarkers,
