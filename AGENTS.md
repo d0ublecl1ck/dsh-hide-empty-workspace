@@ -33,6 +33,6 @@ DSH Web 插件：最后一个未归档会话被归档的瞬间，自动隐藏该
 ## 当前状态与下一步
 
 - 已实现（0.2.0）：自动隐藏、手动隐藏、恢复入口、当前工作区例外、行标记失配自检、发布元数据与发布门。
-- 已验证：`npm test` 16/16；`npm run verify:browser` 10/10（2026-10-02，DSH Desktop，24 个工作区）——含「右键弹出隐藏入口」「隐藏落到 localStorage 且 display:none 生效」「恢复后集合与可见性回到原样」。
+- 已验证：`npm test` 16/16；`npm run verify:browser` 9 条断言全过（2026-10-02，DSH Desktop，24 个工作区，带 `--gif` 时输出 `10 passed`，多的一行是产物确认）——含「右键弹出隐藏入口」「隐藏落到 localStorage 且 display:none 生效」「恢复后集合与可见性回到原样」。
 - 未验证：侧栏收成 rail 时组件不挂载，该形态下的行为未在真实浏览器确认；与 `dsh-better-workspace` 等接管侧栏的插件同时启用时的表现未实测（详见 `.freak`）。
-- 下一步（未做，按需授权）：投稿 awesome-dsh-plugin、npm 发布、加 CI、rail 形态验收。
+- 下一步：awesome-dsh-plugin 投稿已提（[PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)，2026-10-02），等年龄门自动放行与 review；未做且需按需授权的是 npm 发布、CI、rail 形态验收。

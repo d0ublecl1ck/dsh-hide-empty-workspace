@@ -118,6 +118,7 @@ tests/hidden-workspaces.test.mjs   16 条纯函数单测
 scripts/verify-browser.mjs  真实浏览器验收 + 展示产物录制
 scripts/check-release.mjs   离线发布门
 assets/showcase/            由 verify-browser 产出的截图与 GIF
+screenshots.json            给插件市场/目录站的展示截图清单
 AGENTS.md                   给下一次会话的边界与命令
 .freak                      待核查线索：对标观察 + 未验证清单
 ```
@@ -126,7 +127,7 @@ AGENTS.md                   给下一次会话的边界与命令
 
 ```sh
 npm test                  # 16 条纯函数单测
-npm run verify:browser    # 真实浏览器验收，需要实例在跑（10 条断言）
+npm run verify:browser    # 真实浏览器验收，需要实例在跑（9 条断言）
 npm run check-release     # 发布门：清单、入口、模块 id、platform seed
 npm run verify            # test + check-release
 ```

@@ -103,6 +103,7 @@ tests/hidden-workspaces.test.mjs   16 pure-function unit tests
 scripts/verify-browser.mjs  live-browser verification + showcase recording
 scripts/check-release.mjs   offline release gate
 assets/showcase/            screenshots and GIF produced by verify-browser
+screenshots.json            storefront screenshot manifest
 AGENTS.md                   boundaries and commands for the next session
 .freak                      open leads: competitor watch + unverified list
 ```
@@ -111,11 +112,11 @@ AGENTS.md                   boundaries and commands for the next session
 
 ```sh
 npm test                  # 16 pure-function unit tests
-npm run verify:browser    # live browser verification (10 assertions); needs a running instance
+npm run verify:browser    # live browser verification (9 assertions); needs a running instance
 npm run check-release     # release gate: manifest, entry points, module id, platform seed
 npm run verify            # test + check-release
 ```
 
-`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts ten things and keeps the screenshots. It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
+`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts nine things and keeps the screenshots. It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
 
 Unit tests cannot tell you whether the slot ever mounted, so every claim that the plugin works must come with `verify:browser` output.
