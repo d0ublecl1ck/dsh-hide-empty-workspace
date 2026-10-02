@@ -32,7 +32,7 @@ This plugin turns "it is empty now" into a passive signal: the moment a workspac
 
 ![Right-click "隐藏工作区" and the "已隐藏 N" entry at the bottom](assets/showcase/hide-empty-workspace.gif)
 
-Every frame above was produced by `npm run verify:browser` against a live instance (DSH Desktop, 2026-10-02, 24 workspaces). To keep real workspace names, session titles and the account balance out of a public repository, captures are redacted by default: every sidebar row's text is replaced with a neutral bar and the frame is clipped to the sidebar column. Use `--no-redact` for local inspection.
+The frame above is clipped to the sidebar column, with workspace names redacted. Every frame was produced by `npm run verify:browser` against a live instance (DSH Desktop, 2026-10-02, 24 workspaces).
 
 The same run, verbatim:
 
@@ -117,6 +117,6 @@ npm run check-release     # release gate: manifest, entry points, module id, pla
 npm run verify            # test + check-release
 ```
 
-`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts nine things and keeps the screenshots. It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
+`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts nine things and keeps the screenshots. Captures redact the sidebar row text and clip to the sidebar column by default (`--no-redact` disables it). It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
 
 Unit tests cannot tell you whether the slot ever mounted, so every claim that the plugin works must come with `verify:browser` output.

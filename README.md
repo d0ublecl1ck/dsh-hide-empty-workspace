@@ -32,7 +32,7 @@
 
 ![右键「隐藏工作区」与底部「已隐藏 N」入口](assets/showcase/hide-empty-workspace.gif)
 
-上图的每一帧都由 `npm run verify:browser` 在真实实例上产出（本机 DSH Desktop，2026-10-02 15:09，24 个工作区）。为避免把真实工作区名、会话标题和账户余额带进公开仓库，截图默认做了隐私处理：侧栏每一行的文字被替换成中性色块，画面裁到侧栏一列。本地自查可以 `--no-redact`。
+上图是侧栏一列的截图，工作区名已隐去。每一帧都由 `npm run verify:browser` 在真实实例上产出（DSH Desktop，2026-10-02，24 个工作区）。
 
 同一场验收的实测读数：
 
@@ -132,6 +132,6 @@ npm run check-release     # 发布门：清单、入口、模块 id、platform s
 npm run verify            # test + check-release
 ```
 
-`npm run verify:browser` 自己完成整套认证与取证：读 `$DSH_HOME/.credentials.yaml` 里的 `client-connection/browser-session` secret，按 `v1.<payload>.<hmac>` 规则签一个浏览器会话 cookie，用 CDP 注入后打开实例，逐条断言并留截图；`--gif` 另出演示动图。它会在验收过程中隐藏两个工作区，然后**把恢复也作为断言的一部分**，确保不留痕迹。
+`npm run verify:browser` 自己完成整套认证与取证：读 `$DSH_HOME/.credentials.yaml` 里的 `client-connection/browser-session` secret，按 `v1.<payload>.<hmac>` 规则签一个浏览器会话 cookie，用 CDP 注入后打开实例，逐条断言并留截图；`--gif` 另出演示动图。录制默认对侧栏文字做隐私处理并裁到侧栏一列（`--no-redact` 关闭）。它会在验收过程中隐藏两个工作区，然后**把恢复也作为断言的一部分**，确保不留痕迹。
 
 单测覆盖不到「slot 到底挂没挂上」，所以任何「插件有效」的结论都必须附 `verify:browser` 的实测输出。
