@@ -16,7 +16,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test tests/hidden-workspaces.test.mjs"
+    "test": "node --test tests/hidden-workspaces.test.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs"
   },
   "dsh": {
     "bundle": {
