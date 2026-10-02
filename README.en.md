@@ -26,11 +26,11 @@ So the sidebar rots: you open one or two sessions in a project, archive them whe
 
 This plugin turns "it is empty now" into a passive signal: the moment a workspace's unarchived session count falls from `1+` to `0`, its sidebar row hides itself.
 
-**That moment is the only moment it acts on its own.** Manual hiding still lives in the right-click menu, and the restore entry sits at the bottom of the sidebar. The plugin owns no state.
+**That moment is the only moment it acts on its own.** Manual hiding lives in each workspace row's own "..." menu, and the restore entry sits at the bottom of the sidebar. The plugin owns no state.
 
 ## What it looks like
 
-![Right-click "隐藏工作区" and the "已隐藏 N" entry at the bottom](assets/showcase/hide-empty-workspace.gif)
+![The "隐藏工作区" entry inside a workspace row menu, and the "已隐藏 N" entry at the bottom](assets/showcase/hide-empty-workspace.gif)
 
 The frame above is clipped to the sidebar column, with workspace names redacted. Every frame was produced by `npm run verify:browser` against a live instance (DSH Desktop, 2026-10-02, 24 workspaces).
 
@@ -40,16 +40,18 @@ The same run, verbatim:
 PASS  signed browser session accepted at http://127.0.0.1:43129 (no 401)
 PASS  shipped sidebar still renders 24 workspace row(s) with data-row-key="workspace:<id>"
 PASS  no marker-mismatch banner: the row contract holds and the self-check stays quiet
-PASS  right-click on workspace:9a1f4aca-… opened the plugin's 「隐藏工作区」 entry
+PASS  the shipped Workspace row menu carries the 「隐藏工作区」 entry
+PASS  a real mouse press/release on the entry ran the action
+PASS  the appended entry closes the shipped menu it lives in
 PASS  「隐藏工作区」 recorded both workspaces in localStorage: 9a1f4aca-…, eb5f9d32-…
 PASS  display:none actually reached the shipped rows (1 hidden, 1 kept as the workspace in use)
 PASS  sidebar footer shows 「已隐藏 2」
 PASS  restore returned the hidden set to its original value: (empty)
 PASS  no workspace row is left hidden (0)
-10 passed, 0 failed
+11 passed, 0 failed
 ```
 
-Line 6 is a measured confirmation of the exception: hiding two workspaces in a row leaves exactly one at `display:none` — the other is the workspace currently in use, which stays visible by design.
+The `display:none` line is a measured confirmation of the exception: hiding two workspaces in a row leaves exactly one at `display:none` — the other is the workspace currently in use, which stays visible by design.
 
 ## Install
 
@@ -66,7 +68,7 @@ dsh plugin --profile web add /absolute/path/dsh-hide-empty-workspace
 ## When it fires
 
 - **Automatic**: you archive a workspace's last unarchived session → its row hides.
-- **Manual**: right-click any workspace row → "隐藏工作区".
+- **Manual**: hover any workspace row and pick "隐藏工作区" from its "..." menu.
 - **Restore**: the "已隐藏 N" entry at the bottom of the sidebar.
 - **Automatic restore**: a hidden workspace gains an unarchived session again → it reappears.
 
@@ -91,15 +93,15 @@ It will not fire for:
 - **Never rewrites the workspace registry**: it does not touch the `workspaces` service or `settings.yaml`.
 - **Never talks to the network.**
 - **The only write** is a hidden-set in browser `localStorage` (`dsh-hide-empty-workspace.hidden.v1`). Clear it and everything is back.
-- **Never replaces the official UI**: it only toggles `display` on rows the shell already rendered. If a DSH upgrade removes those rows it will not fail silently — the sidebar footer shows `⚠ 工作区行标记失配，插件未生效`.
+- **Never replaces the official UI**: it only toggles `display` on rows the shell already rendered and appends one entry to the row's own "..." menu; it does not take over or redraw any shipped component. If a DSH upgrade removes those rows it will not fail silently — the sidebar footer shows `⚠ 工作区行标记失配，插件未生效`.
 
 ## Layout
 
 ```text
 index.js                    host half (this plugin needs no host capability; a placeholder apply)
-client.js                   browser half: the rule, the context menu, the restore entry, the self-check
+client.js                   browser half: the rule, the row-menu entry, the restore entry, the self-check
 cordis.patch.yml            the bundle layer that inserts this plugin
-tests/hidden-workspaces.test.mjs   16 pure-function unit tests
+tests/hidden-workspaces.test.mjs   19 pure-function unit tests
 scripts/verify-browser.mjs  live-browser verification + showcase recording
 scripts/check-release.mjs   offline release gate
 assets/showcase/            screenshots and GIF produced by verify-browser
@@ -111,12 +113,12 @@ AGENTS.md                   boundaries and commands for the next session
 ## Verification
 
 ```sh
-npm test                  # 16 pure-function unit tests
-npm run verify:browser    # live browser verification (9 assertions); needs a running instance
-npm run check-release     # release gate: manifest, entry points, module id, platform seed
+npm test                  # 19 pure-function unit tests
+npm run verify:browser    # live browser verification (11 assertions); needs a running instance
+npm run check-release     # release gate: manifest, entry points, module id, platform seed, version match
 npm run verify            # test + check-release
 ```
 
-`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts nine things and keeps the screenshots. Captures redact the sidebar row text and clip to the sidebar column by default (`--no-redact` disables it). It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
+`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts eleven things and keeps the screenshots. Captures redact the sidebar row text and clip to the sidebar column by default (`--no-redact` disables it). It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
 
 Unit tests cannot tell you whether the slot ever mounted, so every claim that the plugin works must come with `verify:browser` output.

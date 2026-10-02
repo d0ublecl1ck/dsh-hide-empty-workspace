@@ -5,11 +5,12 @@
 - [ ] `KannaKuron/dsh-better-workspace`（npm 5923 次/月，12★）——品类头部，hierarchical 工作区树。**IF** 它接管侧栏并改写行标记 **THEN** 本插件的自动隐藏会静默失效（自检横幅会替我们发现）。每次它发版后跑一次 `npm run verify:browser` 确认行标记仍在。记录：2026-10-02
 - [ ] `Robert-Wang-08/dsh-plugin-sidebar-visibility`（2★）——一个包塞了隐藏/折叠/拖排/会话动作七件事。盯它是否把「隐藏」做成自动化；若做，我们的差别只剩零数据改写与零配置。记录：2026-10-02
 - [ ] [awesome-dsh-plugin PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)（2026-10-02 提交）——投稿只加了一个 `data/plugins/d0ublecl1ck__dsh-hide-empty-workspace.yml`。仓库建于 `2026-10-02T07:05:22Z`，其 `check-submission.mjs` 的 `MIN_AGE_DAYS = 1` 会先判红，由 `regate.yml` 每 6 小时重跑并在满 1 天后自动转绿，**不要关闭重开或空提交**。盯 review 是否要求改分类或描述。记录：2026-10-02
-- [ ] `screenshots.json` —— 已声明两张（右键菜单态、隐藏生效态）。市场构建每晚抓取；若截图顺序或内容需要调整，推本仓库即可，不必再提 PR。记录：2026-10-02
+- [ ] `screenshots.json` —— 已声明两张（工作区行菜单里的隐藏入口态、隐藏生效态）。市场构建每晚抓取；若截图顺序或内容需要调整，推本仓库即可，不必再提 PR。记录：2026-10-02
 
 ## 未验证 / 可能漂移
 - [ ] `client.js` 的 `useWorkspaces()` / `useSessions()` 快照形状（`items[].sessionIds`、`archivedSessionIds`、`byId[].retainedBy.mainView`）只被结构化描述，没有对 official 包做类型校验；字段改名不会编译报错，只会静默失效。下次核对 `WorkspaceSnapshot` / `SessionListState`。记录：2026-10-02
-- [ ] `sidebar.footer.action` 席位名与 list 语义未做版本门槛校验；DSH 改版后可能注册不上而不报错。下次升级 DSH 后跑 `npm run verify:browser`（第 4 条断言会拦住）。记录：2026-10-02
+- [ ] `sidebar.footer.action` 席位名与 list 语义未做版本门槛校验；DSH 改版后可能注册不上而不报错。下次升级 DSH 后跑 `npm run verify:browser`（前 3 条断言会拦住）。记录：2026-10-02
 - [ ] `scripts/verify-browser.mjs` 依赖的 cookie 方案（名字 `dsh-auth-<sha256(authority)>`、值 `v1.<base64url payload>.<base64url hmac>`、30 天有效期）是从 `dsh-client-connection` 的产物里读出来的**私有实现**，不属于对外契约；DSH 一改签名或字段，脚本会以 401 失败。届时重新核对 `BrowserAuth` 的 `encodeCookie` / `cookieName`。记录：2026-10-02
-- [ ] 侧栏收成 rail（56px）时本组件不挂载，期间在别处归档最后一个会话不会被捕捉；恢复展开后也不会补判，只能右键手动隐藏。尚未在真实浏览器确认 rail 下的具体表现。记录：2026-10-02
+- [ ] 侧栏收成 rail（56px）时本组件不挂载，期间在别处归档最后一个会话不会被捕捉；恢复展开后也不会补判，只能在行菜单里手动隐藏。尚未在真实浏览器确认 rail 下的具体表现。记录：2026-10-02
+- [ ] 追加的菜单项依赖官方菜单的 DOM 形状（`[role="menu"]`、`[role="menuitem"]`、`[class*="viewport"]`）与「Escape 关闭菜单」这一行为，这些都不是对外契约。官方改菜单实现时会静默失效（菜单里干脆不出现那一项）。每次升级 DSH 后跑 `npm run verify:browser`，第 4/5/6 条断言会拦住。记录：2026-10-02
 - [ ] 自检的 1500ms 等待是经验值（`MARKER_CHECK_DELAY_MS`）。首屏更慢的机器上可能误报。下次在有冷启动压力的环境里复看。记录：2026-10-02
