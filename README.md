@@ -1,52 +1,136 @@
+<sub>🌐 <b>中文</b> · <a href="README.en.md">English</a></sub>
+
+<div align="center">
+
 # dsh-hide-empty-workspace
 
-侧边栏工作区在**最后一个未归档会话被归档的那一刻**自动隐藏，另提供右键手动隐藏与恢复入口。
+> *「把最后一个会话归档的那一刻，那个空工作区自己从侧栏消失了。」*
 
-## 行为
+![DSH plugin](https://img.shields.io/badge/DSH-plugin-blueviolet)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![no data writes](https://img.shields.io/badge/archive%20%C2%B7%20delete%20%C2%B7%20rewrite-none-brightgreen)
 
-- **新增工作区不会被隐藏**：刚添加的工作区没有会话，仍然显示（这正是本插件不做「无会话即隐藏」的原因）。
-- **自动隐藏**：某工作区的未归档会话数从 `1+` 掉到 `0`（最后一个会话被归档）时，该工作区的侧栏行隐藏。
-- **自动恢复**：该工作区重新出现未归档会话（`0 -> 1+`）时，自动取消隐藏。
-- **手动隐藏**：在侧栏任意工作区行上右键 →「隐藏工作区」，任何情况下都立即隐藏。
-- **恢复入口**：侧栏底部出现「已隐藏 N」按钮，展开后逐个「恢复 &lt;标题&gt;」。
-- **当前工作区例外**：正在使用的工作区即使满足隐藏条件也保持可见。
-- 「未分组」桶永不隐藏。
-- 只切换侧栏行元素的 `display`，不归档、不删除、不改写任何工作区注册与会话数据。
+**侧栏的自动瘦身。它只在这条规则成立时动手：某个工作区的未归档会话从 `1+` 掉到 `0`。它不归档、不删除、不改写工作区注册，唯一会写的是浏览器里的隐藏集合。**
 
-## 原理
+[它解决什么问题](#它解决什么问题) · [效果示例](#效果示例) · [快速开始](#快速开始) · [触发方式](#触发方式) · [它和同类有什么不同](#它和同类有什么不同) · [安全边界](#安全边界) · [文件结构](#文件结构) · [验证与测试](#验证与测试)
 
-官方侧栏浏览器为每个工作区渲染一行 `[data-row-key="workspace:<workspaceId>"]`，会话行是 `[data-row-key="session:<sessionId>"]`。
+</div>
 
-- `index.js`：宿主半边，占位。
-- `client.js`：浏览器半边。向 `sidebar.footer.action`（list 槽位）注册一个组件，通过标准根钩子 `useWorkspaces` / `useSessions` 读取工作区与会话快照：
-  - `liveSessionCounts` 直接按 `workspace.sessionIds` 减去 `archivedSessionIds` 计数。**不要**再要求会话出现在 `useSessions().byId` 快照里——该快照不保证包含全部会话，用存在性判断会让计数恒为 0，自动隐藏永远不触发（实测踩过）。
-  - `stepHidden` 只在跨快照的计数转变上动作：首次见到的工作区只记录、不隐藏；`1+ -> 0` 隐藏；`0 -> 1+` 恢复。
-  - `applyRowVisibility` 对官方行设置 `display: none`，`MutationObserver` 在官方重渲染后重新对齐。
-  - 隐藏集合持久化在 `localStorage['dsh-hide-empty-workspace.hidden.v1']`。
+---
 
-## 安装（DSH Desktop）
+## 它解决什么问题
+
+归档是 DSH 里一个**手动动作**，而「这个工作区已经空了」没有人替你判断。
+
+于是侧栏总是这样烂掉：你随手给某个项目开过一两次会话，用过就归档掉，可那个工作区还留在列表里——没有会话，也不再有用，只是在那里占一行。攒到十几个之后，真正在用的那几个被挤到了下面。
+
+这个插件把「空了」变成一个**被动触发的清理信号**：某工作区的未归档会话数从 `1+` 掉到 `0` 的那一刻，它的侧栏行自动隐藏。
+
+**它只在那一刻动手。** 手动隐藏仍然在右键菜单里；恢复入口在侧栏底部。插件不接管任何状态。
+
+## 效果示例
+
+![右键「隐藏工作区」与底部「已隐藏 N」入口](assets/showcase/hide-empty-workspace.gif)
+
+上图的每一帧都由 `npm run verify:browser` 在真实实例上产出（本机 DSH Desktop，2026-10-02 15:09，24 个工作区）。为避免把真实工作区名、会话标题和账户余额带进公开仓库，截图默认做了隐私处理：侧栏每一行的文字被替换成中性色块，画面裁到侧栏一列。本地自查可以 `--no-redact`。
+
+同一场验收的实测读数：
+
+```text
+PASS  signed browser session accepted at http://127.0.0.1:43129 (no 401)
+PASS  shipped sidebar still renders 24 workspace row(s) with data-row-key="workspace:<id>"
+PASS  no marker-mismatch banner: the row contract holds and the self-check stays quiet
+PASS  right-click on workspace:9a1f4aca-… opened the plugin's 「隐藏工作区」 entry
+PASS  「隐藏工作区」 recorded both workspaces in localStorage: 9a1f4aca-…, eb5f9d32-…
+PASS  display:none actually reached the shipped rows (1 hidden, 1 kept as the workspace in use)
+PASS  sidebar footer shows 「已隐藏 2」
+PASS  restore returned the hidden set to its original value: (empty)
+PASS  no workspace row is left hidden (0)
+10 passed, 0 failed
+```
+
+第 6 行是一次**实测**确认：连着隐藏两个工作区，只有一个变成 `display:none`，另一个是「正在使用的工作区」——它按设计保持可见。
+
+## 快速开始
+
+```sh
+# 直接从 GitHub 装（最短，不需要 npm 账号）
+dsh plugin --profile web add https://codeload.github.com/d0ublecl1ck/dsh-hide-empty-workspace/tar.gz/refs/heads/main
+
+# 本地改代码时，把它以路径形式加进 profile
+dsh plugin --profile web add /绝对路径/dsh-hide-empty-workspace
+```
+
+`dsh plugin add` 会在 profile 目录里同时写入 `dependencies` 与 `dsh.profile.bundles` 两处，装完刷新页面即可。
+
+<details>
+<summary>DSH Desktop 里没有 <code>dsh</code> 命令时</summary>
+
+Desktop 自带一份运行时，直接用它可以跳过 PATH：
 
 ```sh
 DSH_HOME="$HOME/Library/Application Support/dsh-desktop/harness" \
-  "$HOME/Library/Application Support/dsh-desktop/harness/.desktop-bin/node" \
+  "$DSH_HOME/.desktop-bin/node" \
   "/Applications/DSH Desktop.app/Contents/Resources/app.asar.unpacked/node_modules/@deepseek-ai/dsh/lib/bin.js" \
-  plugin --profile web add /Users/<you>/dsh-hide-empty-workspace
+  plugin --profile web add /绝对路径/dsh-hide-empty-workspace
 ```
 
-`patchReload: live` 的 profile 装完刷新页面即生效（宿主行即时挂载，客户端半边在页面重新加载后生效）。
+Windows 上把路径换成本机对应位置即可，参数不变。
+</details>
 
-## 开发与验证
+## 触发方式
+
+- **自动**：你把某个工作区的最后一个未归档会话归档掉 → 它的行隐藏。
+- **手动**：在任意工作区行上**右键** → 「隐藏工作区」。任何情况下都立即隐藏。
+- **恢复**：侧栏底部的「已隐藏 N」→ 展开 → 「恢复 <标题>」。
+- **自动恢复**：某个被隐藏的工作区重新有了未归档会话 → 自动取消隐藏。
+
+不会触发的情况：
+
+- **刚添加的工作区**：新工作区没有会话，但它是「首次见到」的，只被记录、不被隐藏。这是本插件不做「无会话即隐藏」的直接原因。
+- **正在使用的工作区**：即使满足隐藏条件也保持可见（上面第 6 条断言实测到的就是它）。
+- **「未分组」桶**：永不隐藏。
+
+## 它和同类有什么不同
+
+| | 它怎么做 | 与本插件的差别 |
+|---|---|---|
+| [SUZUNAMI/dsh-workspace-hide](https://github.com/SUZUNAMI/dsh-workspace-hide) | 设置页逐个开关；隐藏时**连带归档**该工作区的会话 | 它要求你去设置页，且会写归档状态；本插件自动触发，且零数据写入 |
+| [Robert-Wang-08/dsh-plugin-sidebar-visibility](https://github.com/Robert-Wang-08/dsh-plugin-sidebar-visibility) | 一个包七件事：隐藏、折叠、拖排、会话重命名/分叉/归档/收藏 | 它是功能集；本插件只做一件事，零配置 |
+| [KannaKuron/dsh-better-workspace](https://github.com/KannaKuron/dsh-better-workspace) | 侧栏工作区两层文件夹树 | 它换掉整棵侧栏树；两者同时启用时行标记由对方决定，本插件会由自检横幅告诉你它已失效 |
+| [0imzero/dsh-workspace-menu](https://github.com/0imzero/dsh-workspace-menu) | 首页工作区/会话右键菜单：置顶、重命名、归档、分叉 | 它是菜单，不含自动判断 |
+
+## 安全边界
+
+- **不归档、不取消归档、不删除**任何会话或工作区。
+- **不改写工作区注册**：不动 `workspaces` 服务，不动 `settings.yaml`。
+- **不联网**：插件不发任何请求。
+- **唯一写入**是浏览器 `localStorage` 里的隐藏集合（键 `dsh-hide-empty-workspace.hidden.v1`）。清掉它，一切恢复原样。
+- **不替换官方 UI**：只在官方已经渲染好的行上切 `display`；官方改版导致找不到行时，它不再默默无闻——侧栏底部会出现 `⚠ 工作区行标记失配，插件未生效`。
+
+## 文件结构
+
+```text
+index.js                    宿主半边（本插件不需要宿主能力，占位 apply）
+client.js                   浏览器半边：判定、右键菜单、恢复入口、自检
+cordis.patch.yml            bundle 层，声明插入本插件
+tests/hidden-workspaces.test.mjs   16 条纯函数单测
+scripts/verify-browser.mjs  真实浏览器验收 + 展示产物录制
+scripts/check-release.mjs   离线发布门
+assets/showcase/            由 verify-browser 产出的截图与 GIF
+AGENTS.md                   给下一次会话的边界与命令
+.freak                      待核查线索：对标观察 + 未验证清单
+```
+
+## 验证与测试
 
 ```sh
-node --test tests/hidden-workspaces.test.mjs          # 12 条纯函数单测
-DSH_BIN=<dsh-wrapper> DSH_HOME=<home> \
-  node <create-dsh-plugin>/scripts/verify-dsh-plugin.mjs --plugin-dir .   # G1-G5 组合与激活梯子
+npm test                  # 16 条纯函数单测
+npm run verify:browser    # 真实浏览器验收，需要实例在跑（10 条断言）
+npm run check-release     # 发布门：清单、入口、模块 id、platform seed
+npm run verify            # test + check-release
 ```
 
-客户端半边必须另做浏览器验证（verify 梯子证明不了渲染）。已验证的做法：用本机 headless Chrome + CDP，先从 `<home>/.credentials.yaml` 的 `client-connection/browser-session` secret 签一个浏览器会话 cookie 注入页面，再查询 `[data-row-key]` 的 `display`；侧栏可能停在收起（rail）态，要先点 `aria-label="打开侧边栏"` 再用 DOM。
+`npm run verify:browser` 自己完成整套认证与取证：读 `$DSH_HOME/.credentials.yaml` 里的 `client-connection/browser-session` secret，按 `v1.<payload>.<hmac>` 规则签一个浏览器会话 cookie，用 CDP 注入后打开实例，逐条断言并留截图；`--gif` 另出演示动图。它会在验收过程中隐藏两个工作区，然后**把恢复也作为断言的一部分**，确保不留痕迹。
 
-## 已知边界
-
-- 依赖官方侧栏的行标记 `data-row-key`；官方若改动该属性，插件会静默不生效。
-- 侧栏收起（rail）时组件不挂载；期间在别处归档最后一个会话不会被捕捉，展开后可右键手动隐藏。
-- 与同样接管 `sidebar.workspaces` 的插件（例如 dsh-worksop-plus、dsh-better-workspace）同时启用时，行标记由对方决定，本插件可能失效。
+单测覆盖不到「slot 到底挂没挂上」，所以任何「插件有效」的结论都必须附 `verify:browser` 的实测输出。

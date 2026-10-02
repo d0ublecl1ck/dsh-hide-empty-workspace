@@ -61,7 +61,7 @@ const entry = typeof pkg.main === 'string' ? pkg.main : pkg.exports?.['.']?.defa
 const clientEntry = pkg.exports?.['./client']?.default ?? pkg.exports?.['./client']
 if (typeof entry !== 'string' || !exists(entry)) fail('package.json: main/exports["."] does not resolve to a file')
 if (typeof clientEntry !== 'string' || !exists(clientEntry)) fail('package.json: exports["./client"] does not resolve to a file')
-for (const doc of ['README.md', 'CHANGELOG.md', 'LICENSE', 'AGENTS.md']) {
+for (const doc of ['README.md', 'README.en.md', 'CHANGELOG.md', 'LICENSE', 'AGENTS.md']) {
   if (!exists(doc)) fail('missing release document: ' + doc)
 }
 
