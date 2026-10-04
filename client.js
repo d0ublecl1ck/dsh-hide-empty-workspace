@@ -44,6 +44,15 @@ window.__ModuleLoader__.load({
     const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
     /** Grace period before the row-marker self-check runs, so a slow first paint is not read as a failure. */
     const MARKER_CHECK_DELAY_MS = 1500
+    /**
+     * How long a Workspace-row click keeps the appended entry armed.
+     *
+     * The row's own menu mounts inside the click that opens it, so this only has
+     * to cover one render. It exists to end the gesture: menus that open later
+     * without a click (the composer's `/` and `@` menus, for instance) must not
+     * inherit an arm nobody is waiting for any more.
+     */
+    const MENU_ARM_TIMEOUT_MS = 1000
 
     /** Eye-off glyph for the appended menu entry; static markup, no user input. */
     const HIDE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" stroke-width="1">'
@@ -143,6 +152,33 @@ window.__ModuleLoader__.load({
     function workspaceKeyFromTarget(target) {
       const row = target?.closest?.(ANY_ROW_SELECTOR)
       return workspaceKeyFromRowKey(row?.getAttribute?.(ROW_KEY_ATTRIBUTE))
+    }
+
+    /**
+     * Menu arming state machine behind the appended Workspace-row entry.
+     *
+     * The entry is not part of the menu's React tree, so the only link between
+     * "this row was clicked" and "this menu opened" is time. Arming must not
+     * outlive that gesture: the shipped row menu is not the only
+     * `[role="menu"]` in the app — the model picker, filters and other popovers
+     * open portals too — and an arm that survives them appends the entry into
+     * whatever menu opens next. 0.4.0 shipped exactly that failure: a row click
+     * armed the key for the rest of the page's life, so the next popover that
+     * opened (the model picker) received a stray 「隐藏工作区」 row.
+     *
+     * @param armedKey - Workspace key armed before this interaction.
+     * @param action - `{ type: 'click', key }` for a document click, where `key`
+     * is the Workspace row under it (`undefined` outside every row),
+     * `{ type: 'injected' }` once the entry has been appended to an open menu,
+     * or `{ type: 'expired' }` when the arm outlived `MENU_ARM_TIMEOUT_MS`.
+     * @returns the Workspace key the next opened menu may receive the entry for,
+     * or `null` when nothing is armed.
+     */
+    function stepMenuArm(armedKey, action) {
+      if (action?.type === 'injected' || action?.type === 'expired') return null
+      if (action?.type !== 'click') return armedKey
+      const clicked = action.key
+      return typeof clicked === 'string' && clicked !== '' ? clicked : null
     }
 
     /** Toggle `display` on the shipped Workspace rows so they match `hidden`. */
@@ -401,19 +437,35 @@ window.__ModuleLoader__.load({
 
       // Remember which Workspace row was clicked, then append the hide entry to
       // whatever menu the shipped row button opens. The menu is a portal, so a
-      // MutationObserver on body is the only reliable place to catch it.
+      // MutationObserver on body is the only reliable place to catch it. The arm
+      // is decided by every click and consumed by the append itself, so a menu
+      // that did not come from a Workspace row never receives the entry (see
+      // `stepMenuArm`).
       React.useEffect(() => {
-        let pendingKey = null
+        let armedKey = null
+        let armTimer = 0
+        const arm = (key) => {
+          armedKey = key
+          if (armTimer !== 0) {
+            clearTimeout(armTimer)
+            armTimer = 0
+          }
+          if (armedKey === null) return
+          armTimer = setTimeout(() => {
+            armTimer = 0
+            armedKey = stepMenuArm(armedKey, { type: 'expired' })
+          }, MENU_ARM_TIMEOUT_MS)
+        }
         const remember = (event) => {
-          pendingKey = workspaceKeyFromTarget(event.target)
+          arm(stepMenuArm(armedKey, { type: 'click', key: workspaceKeyFromTarget(event.target) }))
         }
         const refresh = () => {
-          if (pendingKey === null) return
-          const attached = injectHideMenuItem(document, pendingKey, (key) => {
+          if (armedKey === null) return
+          const attached = injectHideMenuItem(document, armedKey, (key) => {
             hideRef.current(key)
             closeShippedMenu(document)
           })
-          if (!attached) pendingKey = null
+          if (attached) arm(stepMenuArm(armedKey, { type: 'injected' }))
         }
         document.addEventListener('click', remember, true)
         const observer = new MutationObserver(refresh)
@@ -421,6 +473,7 @@ window.__ModuleLoader__.load({
         return () => {
           document.removeEventListener('click', remember, true)
           observer.disconnect()
+          if (armTimer !== 0) clearTimeout(armTimer)
         }
       }, [])
 
@@ -519,6 +572,7 @@ window.__ModuleLoader__.load({
         effectiveHiddenSet,
         workspaceKeyFromRowKey,
         workspaceKeyFromTarget,
+        stepMenuArm,
         hideMenuItemText,
         restoreDialogText,
         applyRowVisibility,

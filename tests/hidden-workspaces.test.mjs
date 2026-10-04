@@ -183,6 +183,33 @@ test('treats only a click inside a workspace row as a workspace-menu request', a
   assert.equal(workspaceKeyFromTarget(null), undefined)
 })
 
+test('arms the workspace menu entry from a click inside that row', async () => {
+  const { stepMenuArm } = await loadPlugin()
+  assert.equal(stepMenuArm(null, { type: 'click', key: 'w1' }), 'w1')
+  assert.equal(stepMenuArm('w1', { type: 'click', key: 'w2' }), 'w2')
+})
+
+test('drops the armed workspace menu as soon as a click lands outside every workspace row', async () => {
+  const { stepMenuArm } = await loadPlugin()
+  assert.equal(stepMenuArm('w1', { type: 'click', key: undefined }), null)
+})
+
+test('consumes the armed key once the entry has been appended, so the next menu stays clean', async () => {
+  const { stepMenuArm } = await loadPlugin()
+  assert.equal(stepMenuArm('w1', { type: 'injected' }), null)
+  assert.equal(stepMenuArm(null, { type: 'injected' }), null)
+})
+
+test('drops an arm that outlived the click, so a later menu stays clean', async () => {
+  const { stepMenuArm } = await loadPlugin()
+  assert.equal(stepMenuArm('w1', { type: 'expired' }), null)
+})
+
+test('never arms anything without a workspace-row click', async () => {
+  const { stepMenuArm } = await loadPlugin()
+  assert.equal(stepMenuArm(null, { type: 'click', key: undefined }), null)
+})
+
 test('spells the workspace menu entry in one place', async () => {
   const { hideMenuItemText } = await loadPlugin()
   assert.equal(hideMenuItemText(), '隐藏工作区')

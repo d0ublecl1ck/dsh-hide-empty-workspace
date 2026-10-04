@@ -188,7 +188,11 @@ const MENU_ITEM_SELECTOR = '[role="menu"] [role="menuitem"]'
 const MENU_ITEM_TEXT = '隐藏工作区'
 const MENU_SELECTOR = '[role="menu"]'
 const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
+/** Marks the entry this plugin appends, so a stray copy is findable in any menu. */
+const MENU_ITEM_FLAG = 'data-dsh-hew-menu-item'
 const RAIL_TOGGLE_SELECTOR = '[aria-label="打开侧边栏"], [aria-label="Open sidebar"]'
+/** The composer's model picker trigger; its popover is another `[role="menu"]` portal. */
+const MODEL_TRIGGER_SELECTOR = 'button[aria-label^="选择模型"]'
 const RESTORE_ENTRY_TEXT = '已隐藏 '
 const RESTORE_DIALOG_SELECTOR = '[role="dialog"]'
 const RESTORE_DIALOG_TITLE = '已隐藏的工作区'
@@ -386,6 +390,24 @@ async function main() {
     const afterFirstHide = await evaluate(cdp, sessionId, probeExpression)
     if (!afterFirstHide.menuOpen) pass('the appended entry closes the shipped menu it lives in')
     else fail('the shipped menu stayed open after the appended entry ran')
+
+    // Regression (0.4.0): the arm outlived the row click, so the entry landed in
+    // whatever `[role="menu"]` opened next. The model picker is one of them:
+    // opening it after a Workspace row was clicked used to add a stray
+    // 「隐藏工作区」 row inside the model popover. The picker menu must stay clean.
+    const modelTrigger = await boxOf('document.querySelector(' + JSON.stringify(MODEL_TRIGGER_SELECTOR) + ')')
+    if (modelTrigger === null) fail('no model picker trigger (' + MODEL_TRIGGER_SELECTOR + ') to check the foreign-menu regression')
+    else {
+      await clickAt(modelTrigger)
+      await sleep(600)
+      const picker = await evaluate(cdp, sessionId, '(() => ({ menus: document.querySelectorAll(' + JSON.stringify(MENU_SELECTOR) + ').length, stray: document.querySelectorAll(' + JSON.stringify(MENU_SELECTOR + ' [' + MENU_ITEM_FLAG + ']') + ').length }))()')
+      if (picker.menus === 0) fail('the model picker did not open, so the foreign-menu regression was not checked')
+      else if (picker.stray === 0) pass('the model picker menu carries no 「' + MENU_ITEM_TEXT + '」 entry')
+      else fail('the model picker menu received a stray 「' + MENU_ITEM_TEXT + '」 entry (' + picker.stray + ')')
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 }, sessionId)
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 }, sessionId)
+      await sleep(300)
+    }
 
     // Two hides, because the workspace currently in use is documented to stay
     // visible even when hidden; with two hidden, at least one must be display:none.
