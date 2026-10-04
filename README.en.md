@@ -34,7 +34,7 @@ This plugin turns "it is empty now" into a passive signal: the moment a workspac
 
 The frame above is clipped to the sidebar column, with workspace names redacted. Every frame was produced by `npm run verify:browser` against a live instance (DSH Desktop, 2026-10-02, 24 workspaces).
 
-The same run, verbatim:
+The same run, verbatim (2026-10-02, 14 assertions then):
 
 ```text
 PASS  signed browser session accepted at http://127.0.0.1:43129 (no 401)
@@ -104,7 +104,7 @@ It will not fire for:
 index.js                    host half (this plugin needs no host capability; a placeholder apply)
 client.js                   browser half: the rule, the row-menu entry, the shipped-Modal restore dialog, the self-check
 cordis.patch.yml            the bundle layer that inserts this plugin
-tests/hidden-workspaces.test.mjs   20 pure-function unit tests
+tests/hidden-workspaces.test.mjs   25 pure-function unit tests
 scripts/verify-browser.mjs  live-browser verification + showcase recording
 scripts/check-release.mjs   offline release gate
 assets/showcase/            screenshots and GIF produced by verify-browser
@@ -116,12 +116,12 @@ AGENTS.md                   boundaries and commands for the next session
 ## Verification
 
 ```sh
-npm test                  # 20 pure-function unit tests
-npm run verify:browser    # live browser verification (14 assertions); needs a running instance
+npm test                  # 25 pure-function unit tests
+npm run verify:browser    # live browser verification (15 assertions); needs a running instance
 npm run check-release     # release gate: manifest, entry points, module id, platform seed, version match
 npm run verify            # test + check-release
 ```
 
-`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts fourteen things and keeps the screenshots. Captures redact the sidebar row text and clip to the sidebar column by default (`--no-redact` disables it). It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
+`npm run verify:browser` does its own authentication and evidence gathering: it reads the `client-connection/browser-session` secret from `$DSH_HOME/.credentials.yaml`, signs a browser session cookie in the `v1.<payload>.<hmac>` form, injects it over CDP, opens the instance, asserts fifteen things and keeps the screenshots. Captures redact the sidebar row text and clip to the sidebar column by default (`--no-redact` disables it). It hides two workspaces along the way and then **treats restoring them as part of the assertions**, so it leaves no trace.
 
 Unit tests cannot tell you whether the slot ever mounted, so every claim that the plugin works must come with `verify:browser` output.

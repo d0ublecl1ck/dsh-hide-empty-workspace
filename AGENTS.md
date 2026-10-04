@@ -4,7 +4,7 @@ DSH Web 插件：最后一个未归档会话被归档的瞬间，自动隐藏该
 
 ## 怎么跑
 
-- 开发：`npm test`（20 条纯函数单测），`npm run verify:browser`（真实浏览器验收，需要实例在跑），`npm run check-release`（发布门）。
+- 开发：`npm test`（25 条纯函数单测），`npm run verify:browser`（真实浏览器验收，需要实例在跑；`--shots <目录>` 可把截图写到临时目录，别覆盖入库产物），`npm run check-release`（发布门）。
 - 装进实例：把本目录以 `link:` 或路径形式加进 profile 的 `dependencies` 与 `dsh.profile.bundles` 两处，然后刷新页面。客户端半边只改文件即生效（symlink），宿主半边改动要 `remove` + `add`。
 - 本仓库**没有构建步骤**：`client.js` / `index.js` 就是交付产物，改完不必 build。
 
@@ -31,11 +31,13 @@ DSH Web 插件：最后一个未归档会话被归档的瞬间，自动隐藏该
 - 正在使用的工作区（`retainedBy.mainView > 0` 所属）与「未分组」桶永不隐藏。
 - **本插件不做任何状态写操作**：不归档、不取消归档、不删除工作区、不联网；唯一写入是 `localStorage` 里的隐藏集合。
 - 隐藏入口只**追加**到官方工作区行菜单末尾：官方没有工作区行 action 的 slot，所以走 DOM 追加，并从当前打开的菜单克隆菜单项 class；不替换、不重绘任何官方组件。
+- **IF** 追加菜单项 **THEN** 它的「上膛」只能属于工作区行自己的那次点击：行外点击解除、追加成功消耗、1s 过期（`stepMenuArm` / `MENU_ARM_TIMEOUT_MS`）；**MUST NOT** 让模型选择器、`/`、`@` 等其它 `[role="menu"]` 拿到该项。
 - 恢复入口必须是官方 `Modal`（`role="dialog"`，Esc / 遮罩点击 / 焦点归还都交给官方）；**MUST NOT** 再自绘底部展开面板。
 
 ## 当前状态与下一步
 
-- 已实现（0.2.0，0.3.0 调整手动隐藏入口，0.4.0 调整恢复入口）：自动隐藏、工作区行菜单里的手动隐藏、官方 Modal 里的逐个恢复、当前工作区例外、行标记失配自检、发布元数据与发布门。0.3.0 把手动隐藏从插件自建的右键菜单改挂到官方工作区行菜单；0.4.0 把恢复入口从自绘底部面板改成官方 Modal。
-- 已验证：`npm test` 20/20；`npm run verify:browser` 14 条断言全过（2026-10-02，DSH Desktop）——含「官方行菜单里出现隐藏入口」「真实鼠标按下/抬起后动作生效」「追加项关闭官方菜单」「隐藏落到 localStorage 且 display:none 生效」「点击入口打开官方 Modal（role=dialog）」「每个隐藏项一个恢复操作」「恢复完自动关闭」「恢复后集合与可见性回到原样」。反向对照做过一次：给菜单项临时加回 `pointerdown` 自毁，脚本立刻报 `only 0/2 hides were persisted` 并退出码 1。
+- 已实现（0.2.0，0.3.0 调整手动隐藏入口，0.4.0 调整恢复入口，0.4.1 修掉菜单项上膛泄漏）：自动隐藏、工作区行菜单里的手动隐藏、官方 Modal 里的逐个恢复、当前工作区例外、行标记失配自检、发布元数据与发布门。0.3.0 把手动隐藏从插件自建的右键菜单改挂到官方工作区行菜单；0.4.0 把恢复入口从自绘底部面板改成官方 Modal。
+- 已验证：`npm test` 25/25（2026-10-04）；`npm run verify:browser` 15 条断言中 11 条通过（2026-10-04，DSH Desktop）——含「官方行菜单里出现隐藏入口」「真实鼠标按下/抬起后动作生效」「追加项关闭官方菜单」「模型选择器菜单里没有隐藏入口」「隐藏落到 localStorage 且 display:none 生效」「侧栏底部出现已隐藏 N」。反向对照各做过一次：给菜单项临时加回 `pointerdown` 自毁 → `only 0/2 hides were persisted`；用 0.4.0 的 `client.js` 跑模型选择器断言 → `the model picker menu received a stray 「隐藏工作区」 entry (1)`。
+- 已知失败（2026-10-04，与本轮改动无关）：验收脚本最后 4 条（`已隐藏 N` 打不开官方 Modal、`恢复` 动作数、隐藏集合复位、行可见性复位）在 0.4.0 与本轮修复版上**同样失败**；`@deepseek-ai/dsh-client-ui-primitives` 的 `Modal` props 契约看起来没变，尚未定位，详见 `.freak`。
 - 未验证：侧栏收成 rail 时组件不挂载，该形态下的行为未在真实浏览器确认；与 `dsh-better-workspace` 等接管侧栏的插件同时启用时的表现未实测（详见 `.freak`）。
 - 下一步：awesome-dsh-plugin 投稿已提（[PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)，2026-10-02），等年龄门自动放行与 review；未做且需按需授权的是 npm 发布、CI、rail 形态验收。

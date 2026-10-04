@@ -14,4 +14,6 @@
 - [ ] 侧栏收成 rail（56px）时本组件不挂载，期间在别处归档最后一个会话不会被捕捉；恢复展开后也不会补判，只能在行菜单里手动隐藏。尚未在真实浏览器确认 rail 下的具体表现。记录：2026-10-02
 - [ ] 追加的菜单项依赖官方菜单的 DOM 形状（`[role="menu"]`、`[role="menuitem"]`、`[class*="viewport"]`）与「Escape 关闭菜单」这一行为，这些都不是对外契约。官方改菜单实现时会静默失效（菜单里干脆不出现那一项）。每次升级 DSH 后跑 `npm run verify:browser`，第 4/5/6 条断言会拦住。记录：2026-10-02
 - [ ] 恢复对话框依赖 platform seed 里 `@deepseek-ai/dsh-client-ui-primitives` 的 `Modal` props 契约（`open` / `onClose` / `title` / `closeLabel` / `description` / `footer`）与它渲染出的 `role="dialog"`；官方改这个 API 时对话框会静默变形或不再出现。每次升级 DSH 后跑 `npm run verify:browser`，第 10-12 条断言会拦住。记录：2026-10-02
+- [ ] **恢复对话框 4 条断言在 2026-10-04 的真实实例上失败**（点 `已隐藏 N` 后 `[role="dialog"]` 不存在、没有 `恢复` 动作、隐藏集合与行可见性未复位）。用 0.4.0 的 `client.js` 与本轮修复版各跑一次，结果逐条相同；`Modal` 的 props 契约（`open`/`onClose`/`title`/`closeLabel`/`description`/`footer`）与 `role="dialog"` 产物都还在，怀疑真实指针没落到那个按钮上（脚本按 `button.textContent` 以「已隐藏 」开头来找它）。下次从这里接着查。记录：2026-10-04
+- [x] 追加菜单项的「上膛」生命周期已在 0.4.1 钉住：`stepMenuArm` 四条单测 + 验收脚本「模型选择器菜单里没有隐藏入口」断言。记录：2026-10-04
 - [ ] 自检的 1500ms 等待是经验值（`MARKER_CHECK_DELAY_MS`）。首屏更慢的机器上可能误报。下次在有冷启动压力的环境里复看。记录：2026-10-02
