@@ -2,7 +2,7 @@
 
 ## 对标观察（每轮回炉先看这几家）
 - [ ] `SUZUNAMI/dsh-workspace-hide`（npm 820 次/月，0★）——同类里最像的一件：它靠设置页手动开关，隐藏时连带归档会话。盯它的 release notes 与 issue，看社区是否在抱怨「必须去设置页」；那正是本插件「自动」的立足点。记录：2026-10-02
-- [ ] `KannaKuron/dsh-better-workspace`（npm 5923 次/月，12★）——品类头部，hierarchical 工作区树。**IF** 它接管侧栏并改写行标记 **THEN** 本插件的自动隐藏会静默失效（自检横幅会替我们发现）。每次它发版后跑一次 `npm run verify:browser` 确认行标记仍在。记录：2026-10-02
+- [ ] `KannaKuron/dsh-better-workspace`（npm 5923 次/月，12★）——品类头部，hierarchical 工作区树。**IF** 它接管侧栏并改写行标记 **THEN** 本插件的自动隐藏会静默失效（自检横幅会替我们发现）。2026-10-07 临时装 0.27.2 实测：它只渲染自带的 `role="treeitem"`，页面 `[data-row-key]` 总数为 0，自检横幅如设计亮起；卸载后 profile 的 `package.json`/`cordis.patch.yml` 与备份逐字节一致、`verify:browser` 17/17。每次它发版后仍要跑一次验收确认行标记。记录：2026-10-07
 - [ ] `Robert-Wang-08/dsh-plugin-sidebar-visibility`（2★）——一个包塞了隐藏/折叠/拖排/会话动作七件事。盯它是否把「隐藏」做成自动化；若做，我们的差别只剩零数据改写与零配置。记录：2026-10-02
 - [ ] [awesome-dsh-plugin PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)（2026-10-02 提交）——投稿只加了一个 `data/plugins/d0ublecl1ck__dsh-hide-empty-workspace.yml`。仓库建于 `2026-10-02T07:05:22Z`，其 `check-submission.mjs` 的 `MIN_AGE_DAYS = 1` 会先判红，由 `regate.yml` 每 6 小时重跑并在满 1 天后自动转绿，**不要关闭重开或空提交**。盯 review 是否要求改分类或描述。记录：2026-10-02
 - [ ] `screenshots.json` —— 已声明三张（工作区行菜单里的隐藏入口态、隐藏生效态、恢复对话框态）。市场构建每晚抓取；若截图顺序或内容需要调整，推本仓库即可，不必再提 PR。记录：2026-10-02
@@ -13,7 +13,8 @@
 - [ ] `scripts/verify-browser.mjs` 依赖的 cookie 方案（名字 `dsh-auth-<sha256(authority)>`、值 `v1.<base64url payload>.<base64url hmac>`、30 天有效期）是从 `dsh-client-connection` 的产物里读出来的**私有实现**，不属于对外契约；DSH 一改签名或字段，脚本会以 401 失败。届时重新核对 `BrowserAuth` 的 `encodeCookie` / `cookieName`。记录：2026-10-02
 - [x] 侧栏收成 rail：2026-10-07 实测（React fiber 探针 + 临时工作区探针）——`sidebar.footer.action` 在 800x600 下仍挂载并收到 `props.wide=false`；rail 期间归档最后一个会话，隐藏集合立刻写入该工作区；放宽到宽栏后，仍会渲染的行被 MutationObserver 补判成 `display:none`。注意：归档后该工作区在分组视图里本就不渲染（侧栏自己过滤空工作区），所以「补判」是在仍有会话的行上验证的。剩余未验证见下一条。记录：2026-10-07
 - [ ] 自检的模式判定依赖两个非契约 DOM 形状：frame 的 `[data-sidebar-collapsed]` 与单列表体的 `[class*="flatList"]`。DSH 改版若改名，单列表/rail 下会重新误报（不伤数据）；升级 DSH 后跑 `npm run verify:browser`，两条模式断言会拦住。记录：2026-10-07
-- [ ] 自检 effect 的依赖是 `[items, effective, props.wide]`，运行中在单列表与分组之间切换不会立即重判，只有挂载与 `wide` 变化会。用户主诉的「切到单列表后亮横幅」由挂载时判定覆盖；运行中切换的即时性未验证。记录：2026-10-07
+- [x] 自检 effect 的依赖是 `[items, effective, props.wide]`，运行中切 groupBy 不立即重判。2026-10-07 实测（UI 真点击「单列表」再切回「按工作区」，不刷新）：三态横幅都为 false，健康形态下无误报；仅当告警已亮着时切到单列表不会立刻消失，而那条告警本就表示此处是空操作，不算错。记录：2026-10-07
+- [ ] npm 的 granular token 不能 `unpublish`（403 `GAT bypass-2fa deprecation`，也见 npm GAT 政策）；本包遗留的 `0.0.0-stage` 占位版本只能去网页端用 2FA 删。发/删版本前先确认 token 类型。记录：2026-10-07
 - [ ] 追加的菜单项依赖官方菜单的 DOM 形状（`[role="menu"]`、`[role="menuitem"]`、`[class*="viewport"]`）与「Escape 关闭菜单」这一行为，这些都不是对外契约。官方改菜单实现时会静默失效（菜单里干脆不出现那一项）。每次升级 DSH 后跑 `npm run verify:browser`，第 4/5/6 条断言会拦住。记录：2026-10-02
 - [ ] 恢复对话框依赖 platform seed 里 `@deepseek-ai/dsh-client-ui-primitives` 的 `Modal` props 契约（`open` / `onClose` / `title` / `closeLabel` / `description` / `footer`）与它渲染出的 `role="dialog"`；官方改这个 API 时对话框会静默变形或不再出现。每次升级 DSH 后跑 `npm run verify:browser`，第 10-12 条断言会拦住。记录：2026-10-02
 - [x] **恢复对话框 4 条断言**：2026-10-04 曾在真实实例上连失 4 条（点 `已隐藏 N` 后 `[role="dialog"]` 不存在、没有 `恢复` 动作、隐藏集合与行可见性未复位）；2026-10-07 重跑 `npm run verify:browser` 这 4 条全部通过（整轮 15 passed / 2 failed，2 条失败是当时尚未装上的新增模式断言）。旧结论按过期处理；若再复现，先查真实指针是否落到按钮上（脚本按 `button.textContent` 以「已隐藏 」开头来找它）。记录：2026-10-07
