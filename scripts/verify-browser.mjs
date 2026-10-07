@@ -208,6 +208,8 @@ const probeExpression = `(() => {
     rowCount: rows.length,
     hiddenRows: rows.filter((row) => row.style.display === 'none').length,
     markerWarning: body.includes('工作区行标记失配'),
+    collapsed: document.querySelector('[data-sidebar-collapsed]') !== null,
+    flatList: document.querySelector('[class*="flatList"]') !== null,
     menuOpen: document.querySelector('[role="menu"]') !== null,
     menuItems,
     menuEntry: menuItems.includes('隐藏工作区'),
@@ -457,6 +459,41 @@ async function main() {
     if (afterRestore.hiddenRows === before.hiddenRows) pass('no workspace row is left hidden (' + afterRestore.hiddenRows + ')')
     else fail('a row is still hidden: ' + afterRestore.hiddenRows)
     await screenshot(cdp, sessionId, join(config.shots, '5-restored.png'))
+
+    // The row-marker self-check must stay quiet in the two shipped states that
+    // render no Workspace row by design — the collapsed rail and the single-list
+    // grouping — while still speaking up when Workspace rows are expected. Each
+    // state is entered for real, observed past the check's own 1.5s delay, then
+    // left the way it was found.
+    const MARKER_SETTLE_MS = 2500
+    const viewStoreKey = await evaluate(cdp, sessionId, 'Object.keys(localStorage).find((key) => key.startsWith("dsh.workspace.view.")) ?? null')
+    const viewStoreRaw = viewStoreKey === null ? null : await evaluate(cdp, sessionId, 'localStorage.getItem(' + JSON.stringify(viewStoreKey) + ')')
+
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 800, height: 600, deviceScaleFactor: 1, mobile: false }, sessionId)
+    await waitFor(cdp, sessionId, (state) => state.collapsed, 'the sidebar to auto-collapse into its rail at 800x600')
+    await sleep(MARKER_SETTLE_MS)
+    const rail = await evaluate(cdp, sessionId, probeExpression)
+    if (rail.rowCount === 0 && !rail.markerWarning) pass('the collapsed rail (800x600, no rows by design) shows no marker-mismatch banner')
+    else fail('the collapsed rail has ' + rail.rowCount + ' row(s) and markerWarning=' + rail.markerWarning)
+    await cdp.send('Emulation.clearDeviceMetricsOverride', {}, sessionId)
+    await waitFor(cdp, sessionId, (state) => !state.collapsed && state.rowCount > 0, 'the wide grouped sidebar to come back')
+
+    if (viewStoreKey === null) fail('no dsh.workspace.view.* key to switch the sidebar into its single-list grouping')
+    else {
+      await evaluate(cdp, sessionId, '(() => { const state = JSON.parse(localStorage.getItem(' + JSON.stringify(viewStoreKey) + ') ?? "{}"); state.groupBy = "flat"; localStorage.setItem(' + JSON.stringify(viewStoreKey) + ', JSON.stringify(state)); return true })()')
+      await cdp.send('Page.reload', {}, sessionId)
+      await waitFor(cdp, sessionId, (state) => state.flatList, 'the single-list body after a flat-mode reload')
+      await sleep(MARKER_SETTLE_MS)
+      const flat = await evaluate(cdp, sessionId, probeExpression)
+      if (flat.rowCount === 0 && !flat.markerWarning) pass('the single-list grouping (no Workspace row by design) shows no marker-mismatch banner')
+      else fail('the single-list grouping has ' + flat.rowCount + ' workspace row(s) and markerWarning=' + flat.markerWarning)
+      const restoreView = viewStoreRaw === null
+        ? 'localStorage.removeItem(' + JSON.stringify(viewStoreKey) + ')'
+        : 'localStorage.setItem(' + JSON.stringify(viewStoreKey) + ', ' + JSON.stringify(viewStoreRaw) + ')'
+      await evaluate(cdp, sessionId, '(() => { ' + restoreView + '; return true })()')
+      await cdp.send('Page.reload', {}, sessionId)
+      await waitFor(cdp, sessionId, (state) => state.readyState === 'complete', 'document load after restoring the grouping')
+    }
 
     if (config.gif !== null) {
       mkdirSync(dirname(config.gif), { recursive: true })

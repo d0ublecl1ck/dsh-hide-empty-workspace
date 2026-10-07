@@ -159,6 +159,30 @@ test('stays quiet while at least one workspace row is present, and without works
   assert.equal(diagnoseRowMarkers(undefined, 0), null)
 })
 
+test('stays quiet when the sidebar is collapsed into its rail', async () => {
+  const { diagnoseRowMarkers, workspaceRowsRendered } = await loadPlugin()
+  const bare = { querySelector: () => null }
+  assert.equal(workspaceRowsRendered(false, bare), false)
+  const collapsed = { querySelector: (selector) => (selector === '[data-sidebar-collapsed]' ? {} : null) }
+  assert.equal(workspaceRowsRendered(true, collapsed), false)
+  assert.equal(diagnoseRowMarkers(34, 0, workspaceRowsRendered(false, bare)), null)
+  assert.equal(diagnoseRowMarkers(34, 0, workspaceRowsRendered(true, collapsed)), null)
+})
+
+test('stays quiet in the single-list grouping, where workspace rows do not exist by design', async () => {
+  const { diagnoseRowMarkers, workspaceRowsRendered } = await loadPlugin()
+  const flat = { querySelector: (selector) => (selector === '[class*="flatList"]' ? {} : null) }
+  assert.equal(workspaceRowsRendered(true, flat), false)
+  assert.equal(diagnoseRowMarkers(34, 0, workspaceRowsRendered(true, flat)), null)
+})
+
+test('still reports the mismatch when the sidebar should be rendering workspace rows', async () => {
+  const { diagnoseRowMarkers, workspaceRowsRendered } = await loadPlugin()
+  const grouped = { querySelector: () => null }
+  assert.equal(workspaceRowsRendered(true, grouped), true)
+  assert.deepEqual(diagnoseRowMarkers(2, 0, workspaceRowsRendered(true, grouped)), { workspaceCount: 2, matchedRowCount: 0 })
+})
+
 test('spells the mismatch warning in one place', async () => {
   const { markerWarningText, markerWarningDetail } = await loadPlugin()
   assert.equal(markerWarningText(), '⚠ 工作区行标记失配，插件未生效')

@@ -39,6 +39,10 @@ window.__ModuleLoader__.load({
     const ROW_KEY_ATTRIBUTE = 'data-row-key'
     const SHIPPED_MENU_SELECTOR = '[role="menu"]'
     const SHIPPED_MENU_ITEM_SELECTOR = '[role="menuitem"]'
+    /** Frame marker the layout sets while the sidebar is collapsed into its rail. */
+    const COLLAPSED_FRAME_SELECTOR = '[data-sidebar-collapsed]'
+    /** Class the single-list body carries; that grouping never renders a Workspace row. */
+    const FLAT_LIST_SELECTOR = '[class*="flatList"]'
     /** Marks our appended entry so re-injection after a React re-render is a no-op. */
     const MENU_ITEM_FLAG = 'data-dsh-hew-menu-item'
     const STORAGE_KEY = 'dsh-hide-empty-workspace.hidden.v1'
@@ -197,20 +201,53 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Whether the shipped sidebar is in a state that renders Workspace rows.
+     *
+     * Two shipped states render none, and neither is the silent failure the
+     * self-check exists to catch:
+     * - the column is collapsed into its rail (`wide === false`, or the frame
+     *   carries `data-sidebar-collapsed`), so the whole browsing tree unmounts;
+     * - the browser is in the single-list grouping (`groupBy: "flat"`), whose
+     *   body renders one flat Session list and never a Workspace row.
+     *
+     * The rail flag is read from the shell prop and the DOM both, because the
+     * frame attribute is what the layout actually commits; the single-list body
+     * exists only in the DOM.
+     *
+     * @param wide - `wide` flag the sidebar shell hands its slots.
+     * @param root - scope to probe; defaults to `document`.
+     * @returns `false` only in a state where Workspace rows cannot appear.
+     */
+    function workspaceRowsRendered(wide, root) {
+      if (wide === false) return false
+      const scope = root ?? document
+      if (scope.querySelector(COLLAPSED_FRAME_SELECTOR) !== null) return false
+      if (scope.querySelector(FLAT_LIST_SELECTOR) !== null) return false
+      return true
+    }
+
+    /**
      * Silent-failure probe. Everything here hangs off the shipped row marker, so
      * "workspaces exist but not a single Workspace row is in the DOM" means the
      * sidebar was renamed, replaced, or taken over by another plugin: this
      * plugin has become a no-op and the user would otherwise never be told.
      *
      * Only the zero-row case counts. A long list may be virtualised, so a
-     * partial count is not evidence of anything.
+     * partial count is not evidence of anything. A sidebar state that renders no
+     * Workspace row by design (`workspaceRowsRendered` is false) is not a
+     * mismatch either, so it stays quiet.
      *
+     * @param workspaceCount - Workspaces the snapshot knows about.
+     * @param matchedRowCount - Workspace rows the DOM exposes.
+     * @param rowsRendered - `workspaceRowsRendered(...)`, or `undefined` to treat
+     *   Workspace rows as expected.
      * @returns `null` when healthy, otherwise the mismatch to report.
      */
-    function diagnoseRowMarkers(workspaceCount, matchedRowCount) {
+    function diagnoseRowMarkers(workspaceCount, matchedRowCount, rowsRendered) {
       const expected = Number.isFinite(workspaceCount) ? workspaceCount : 0
       if (expected <= 0) return null
       if (Number(matchedRowCount) > 0) return null
+      if (rowsRendered === false) return null
       return { workspaceCount: expected, matchedRowCount: 0 }
     }
 
@@ -416,10 +453,11 @@ window.__ModuleLoader__.load({
           setMarkerWarning(diagnoseRowMarkers(
             Array.isArray(items) ? items.length : 0,
             countWorkspaceRows(),
+            workspaceRowsRendered(props.wide),
           ))
         }, MARKER_CHECK_DELAY_MS)
         return () => clearTimeout(timer)
-      }, [items, effective])
+      }, [items, effective, props.wide])
 
       const hide = (key) => {
         const next = new Set(hiddenRef.current)
@@ -577,6 +615,7 @@ window.__ModuleLoader__.load({
         restoreDialogText,
         applyRowVisibility,
         countWorkspaceRows,
+        workspaceRowsRendered,
         diagnoseRowMarkers,
         markerWarningText,
         markerWarningDetail,
