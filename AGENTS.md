@@ -47,8 +47,8 @@ README 只留使用者口径；这张表给维护者评估差异与失效风险�
 
 ## 当前状态与下一步
 
-- 已实现（0.2.0；0.3.0 调整手动隐藏入口；0.4.0 调整恢复入口；0.4.1 修掉菜单项上膛泄漏；0.4.2 收紧自检的模式判定）：自动隐藏、工作区行菜单里的手动隐藏、官方 Modal 里的逐个恢复、当前工作区例外、行标记失配自检、发布元数据与发布门。0.4.2 起自检只在「侧栏本就应渲染工作区行」时报警：收起侧栏（rail）与「单列表」分组保持安静。
+- 已实现（0.2.0；0.3.0 调整手动隐藏入口；0.4.0 调整恢复入口；0.4.1 修掉菜单项上膛泄漏；0.4.2 收紧自检的模式判定；0.4.3 补 npm 安装入口与 CI）：自动隐藏、工作区行菜单里的手动隐藏、官方 Modal 里的逐个恢复、当前工作区例外、行标记失配自检、发布元数据与发布门。0.4.2 起自检只在「侧栏本就应渲染工作区行」时报警：收起侧栏（rail）与「单列表」分组保持安静。
 - 已验证：`npm test` **28/28**（2026-10-07）；`npm run verify:browser` **17/17**（2026-10-07，DSH Desktop，新字节）——含「官方行菜单里出现隐藏入口」「真实鼠标按下/抬起后动作生效」「追加项关闭官方菜单」「模型选择器菜单里没有隐藏入口」「隐藏落到 localStorage 且 display:none 生效」「侧栏底部出现已隐藏 N」「收起侧栏（800×600）无横幅」「单列表无横幅」。同一脚本在旧字节上是 15/17，两条模式断言如期失败，证明它们能钉住本缺陷；反向对照：用 0.4.0 的 `client.js` 跑模型选择器断言 → `the model picker menu received a stray 「隐藏工作区」 entry (1)`。逐条断言见 `scripts/verify-browser.mjs` 头部与运行输出。
 - 已消解：2026-10-04 记录的「验收脚本最后 4 条（官方 Modal、恢复动作、隐藏集合复位、行可见性复位）失败」在 2026-10-07 重跑全部通过，按过期处理。
-- 未验证：rail 期间在别处归档最后一个会话能否被捕捉、展开后是否补判；运行中在单列表与分组之间切换时自检不立即重判；与 `dsh-better-workspace` 等接管侧栏的插件同时启用时的表现未实测（详见 `.freak`）。
-- 下一步：npm 已发布 **0.4.2**（[npmjs](https://www.npmjs.com/package/dsh-hide-empty-workspace)，dist-tag `latest`，2026-10-07，已下载 tarball 核对过 `client.js`/版本）；market 走精选列表 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 的 [PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)，`Submission gate`/`check` 两条全绿、mergeable，等维护者 merge；未做且需按需授权的是打 tag、CI。
+- 已实测（2026-10-07，临时工作区 + headless Chrome）：rail 期间在别处归档最后一个会话会被捕捉（隐藏集合立刻写入该工作区）；放宽到宽栏后，仍会渲染的行被 MutationObserver 补判成 `display:none`（归档后空工作区本身在分组视图里就不渲染，补判是在仍有会话的行上验证的）。仍未验证：运行中在单列表与分组之间切换时自检不立即重判；与 `dsh-better-workspace` 等接管侧栏的插件同时启用时的表现（详见 `.freak`）。
+- 下一步：npm 已发布（[npmjs](https://www.npmjs.com/package/dsh-hide-empty-workspace)，dist-tag `latest`，2026-10-07，已下载 tarball 核对过 `client.js`/版本）；CI 已加（`.github/workflows/ci.yml`）；market 走精选列表 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 的 [PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)，`Submission gate`/`check` 两条全绿、mergeable，等维护者 merge；未做且需按需授权的是打 tag。

@@ -11,7 +11,7 @@
 - [ ] `client.js` 的 `useWorkspaces()` / `useSessions()` 快照形状（`items[].sessionIds`、`archivedSessionIds`、`byId[].retainedBy.mainView`）只被结构化描述，没有对 official 包做类型校验；字段改名不会编译报错，只会静默失效。下次核对 `WorkspaceSnapshot` / `SessionListState`。记录：2026-10-02
 - [ ] `sidebar.footer.action` 席位名与 list 语义未做版本门槛校验；DSH 改版后可能注册不上而不报错。下次升级 DSH 后跑 `npm run verify:browser`（前 3 条断言会拦住）。记录：2026-10-02
 - [ ] `scripts/verify-browser.mjs` 依赖的 cookie 方案（名字 `dsh-auth-<sha256(authority)>`、值 `v1.<base64url payload>.<base64url hmac>`、30 天有效期）是从 `dsh-client-connection` 的产物里读出来的**私有实现**，不属于对外契约；DSH 一改签名或字段，脚本会以 401 失败。届时重新核对 `BrowserAuth` 的 `encodeCookie` / `cookieName`。记录：2026-10-02
-- [ ] 侧栏收成 rail 时插件**其实会挂载**：2026-10-07 实测（React fiber 探针）`sidebar.footer.action` 在 800x600 下收到 `props.wide=false`，工作区行按设计整棵不渲染，自检已据此保持安静。仍未在真实浏览器确认：rail 期间在别处归档最后一个会话能否被捕捉，以及展开后是否补判。记录：2026-10-07
+- [x] 侧栏收成 rail：2026-10-07 实测（React fiber 探针 + 临时工作区探针）——`sidebar.footer.action` 在 800x600 下仍挂载并收到 `props.wide=false`；rail 期间归档最后一个会话，隐藏集合立刻写入该工作区；放宽到宽栏后，仍会渲染的行被 MutationObserver 补判成 `display:none`。注意：归档后该工作区在分组视图里本就不渲染（侧栏自己过滤空工作区），所以「补判」是在仍有会话的行上验证的。剩余未验证见下一条。记录：2026-10-07
 - [ ] 自检的模式判定依赖两个非契约 DOM 形状：frame 的 `[data-sidebar-collapsed]` 与单列表体的 `[class*="flatList"]`。DSH 改版若改名，单列表/rail 下会重新误报（不伤数据）；升级 DSH 后跑 `npm run verify:browser`，两条模式断言会拦住。记录：2026-10-07
 - [ ] 自检 effect 的依赖是 `[items, effective, props.wide]`，运行中在单列表与分组之间切换不会立即重判，只有挂载与 `wide` 变化会。用户主诉的「切到单列表后亮横幅」由挂载时判定覆盖；运行中切换的即时性未验证。记录：2026-10-07
 - [ ] 追加的菜单项依赖官方菜单的 DOM 形状（`[role="menu"]`、`[role="menuitem"]`、`[class*="viewport"]`）与「Escape 关闭菜单」这一行为，这些都不是对外契约。官方改菜单实现时会静默失效（菜单里干脆不出现那一项）。每次升级 DSH 后跑 `npm run verify:browser`，第 4/5/6 条断言会拦住。记录：2026-10-02

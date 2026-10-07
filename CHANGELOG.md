@@ -2,6 +2,15 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的分节习惯，版本号遵循语义化版本。
 
+## 0.4.3 — 2026-10-07
+
+### 变更
+- **补 npm 安装入口**：README 首推 `dsh plugin --profile web add dsh-hide-empty-workspace`，GitHub tarball 保留为不用等镜像同步的备用路径。0.4.2 已发布到 npm，本次重发让包页面的 README 与仓库一致。
+- **新增 CI**（`.github/workflows/ci.yml`）：push / PR 跑 `npm test` 与 `npm run check-release`。
+
+### 验证
+- rail 形态实测（临时工作区 + headless Chrome，2026-10-07）：侧栏收成 rail 期间归档最后一个会话，隐藏集合仍写入该工作区；放宽到宽栏后，仍会渲染的工作区行被 MutationObserver 补判成 `display:none`。
+
 ## 0.4.2 — 2026-10-07
 
 ### 修复
