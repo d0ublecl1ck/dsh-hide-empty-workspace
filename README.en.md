@@ -37,7 +37,10 @@ The frame above is clipped to the sidebar column, with workspace names redacted.
 ## Install
 
 ```sh
-# straight from GitHub (shortest; no npm account needed)
+# from npm (shortest)
+dsh plugin --profile web add dsh-hide-empty-workspace
+
+# or straight from GitHub (no npm account, no mirror sync wait)
 dsh plugin --profile web add https://codeload.github.com/d0ublecl1ck/dsh-hide-empty-workspace/tar.gz/refs/heads/main
 
 # while editing the source, link the working copy instead

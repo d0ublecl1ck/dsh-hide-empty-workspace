@@ -37,7 +37,10 @@
 ## 快速开始
 
 ```sh
-# 直接从 GitHub 装（最短，不需要 npm 账号）
+# 从 npm 装（最短）
+dsh plugin --profile web add dsh-hide-empty-workspace
+
+# 或直接从 GitHub 装（不需要 npm 账号，也不等镜像同步）
 dsh plugin --profile web add https://codeload.github.com/d0ublecl1ck/dsh-hide-empty-workspace/tar.gz/refs/heads/main
 
 # 本地改代码时，把它以路径形式加进 profile
