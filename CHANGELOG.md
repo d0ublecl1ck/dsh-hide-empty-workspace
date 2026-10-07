@@ -2,6 +2,15 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的分节习惯，版本号遵循语义化版本。
 
+## 0.4.2 — 2026-10-07
+
+### 修复
+- **自检不再在「收起侧栏」与「单列表」下误报**：`diagnoseRowMarkers` 原来只认「有工作区、零工作区行」，而侧栏有两种形态按设计就不渲染工作区行——收成 rail 时整棵浏览树卸载；「分组方式 → 单列表」只渲染会话行。现在 `workspaceRowsRendered` 在 `wide === false`、frame 带 `data-sidebar-collapsed`、或列表体带 `flatList` class 时判定「本就不该有工作区行」，自检保持安静；真的行标记失配（既没收起也非单列表）仍照旧报警，用户可见文案不变。
+
+### 新增
+- 单测 3 条钉住模式判定（rail 安静、单列表安静、应报时仍报），共 28 条。
+- `npm run verify:browser` 新增两条模式断言（800×600 rail、单列表），共 17 条。
+
 ## 0.4.1 — 2026-10-04
 
 ### 修复
