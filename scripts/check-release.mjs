@@ -65,6 +65,21 @@ for (const doc of ['README.md', 'README.en.md', 'CHANGELOG.md', 'LICENSE', 'AGEN
   if (!exists(doc)) fail('missing release document: ' + doc)
 }
 
+// 2b. The manifest itself must stay importable by the Host's client scan.
+// `@deepseek-ai/dsh-client-modules` locates a plugin's package.json with
+// `resolve('<name>/package.json')`. Once "exports" exists, that subpath is only
+// reachable when it is declared: without it Node answers
+// ERR_PACKAGE_PATH_NOT_EXPORTED, the scan records "not a client package", and
+// the browser half is never fetched. The failure is completely silent — the
+// Host row still reports active, and the plugin's own row-marker warning can
+// never render because its component was never mounted. 0.4.3 shipped without
+// this subpath and installed as a no-op for exactly that reason.
+if (pkg.exports !== undefined) {
+  if (pkg.exports['./package.json'] === undefined) fail('package.json: exports must declare "./package.json": "./package.json" — @deepseek-ai/dsh-client-modules resolves <name>/package.json to find this manifest, and without the subpath the client half is silently never loaded')
+  else if (pkg.exports['./package.json'] !== './package.json') fail('package.json: exports["./package.json"] must point at "./package.json"')
+  else pass('exports["./package.json"]: declared (client scan can locate this manifest)')
+}
+
 // 3. Host entry keeps the named-export contract the Loader needs.
 const host = read(entry)
 if (!/export\s+function\s+apply\s*\(/.test(host)) fail(entry + ': must export a named apply(ctx) function')

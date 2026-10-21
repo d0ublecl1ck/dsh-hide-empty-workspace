@@ -2,6 +2,12 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的分节习惯，版本号遵循语义化版本。
 
+## 未发布
+
+### 修复
+- **装好后完全没生效（客户端半边从未被加载）**：`package.json` 的 `exports` 只声明了 `"."` 与 `"./client"`，缺少 `"./package.json"`。`@deepseek-ai/dsh-client-modules` 扫描客户端包时用 `resolve('<包名>/package.json')` 定位 manifest，一旦 `exports` 存在而该子路径未声明，Node 就抛 `ERR_PACKAGE_PATH_NOT_EXPORTED`；扫描把它记为「不是客户端包」，`client.js` 因此从未下载、`apply()` 从未执行。宿主的插件行仍显示 `active`（宿主半边是空 `apply`），插件自带的行标记自检也永远没有机会渲染，所以整件事完全静默——表现为「装了、启用了、但侧栏没有任何变化」。现在补上该子路径。
+- **`npm run check-release` 新增一条发布门**：`exports` 存在时必须声明 `"./package.json": "./package.json"`，否则直接判定 not release-ready。这条缺陷此前没有任何门能拦住，因为单测与浏览器验收都跑在已经加载成功的环境里。
+
 ## 0.4.3 — 2026-10-07
 
 ### 变更
