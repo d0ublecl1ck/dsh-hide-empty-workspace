@@ -10,9 +10,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![no data writes](https://img.shields.io/badge/archive%20%C2%B7%20delete%20%C2%B7%20rewrite-none-brightgreen)
 
+> [!WARNING]
+> **This repository is no longer maintained (2026-10-24).**
+> The shipped DSH sidebar now does the same job: a workspace with no visible sessions is never rendered at all. The plugin's automatic hiding is therefore a duplicate implementation, and it no longer tracks upstream UI changes. Do not install it; existing installs can be removed as described below.
+
 **Automatic sidebar housekeeping. It acts on exactly one rule: a workspace's unarchived session count drops from `1+` to `0`. It never archives, deletes or rewrites workspaces — the only thing it writes is a hidden-set in your browser.**
 
-[The problem](#the-problem) · [What it looks like](#what-it-looks-like) · [Install](#install) · [When it fires](#when-it-fires) · [Safety](#safety) · [Layout](#layout)
+[The problem](#the-problem) · [What it looks like](#what-it-looks-like) · [Maintenance status](#maintenance-status) · [Install (archived)](#install-archived) · [When it fires](#when-it-fires) · [Safety](#safety) · [Layout](#layout)
 
 </div>
 
@@ -34,7 +38,19 @@ This plugin turns "it is empty now" into a passive signal: the moment a workspac
 
 The frame above is clipped to the sidebar column, with workspace names redacted. Hiding two workspaces in a row leaves exactly one at `display:none` — the other is the workspace currently in use, which stays visible by design.
 
-## Install
+## Maintenance status
+
+The shipped sidebar (`@deepseek-ai/dsh-client-ui-workspace`) already applies this rule: a workspace whose visible session count filters down to `0` is not rendered at all, and a blank session is visible only while it is the selected one. In practice:
+
+- **Automatic hiding**: covered upstream; this plugin's half is a duplicate — it re-applies `display:none` on the DOM.
+- **Manual hiding and the "已隐藏 N" restore entry**: upstream has no equivalent, but this repository is no longer maintained and will not track upstream changes.
+- **Recommendation**: do not install it; if you already have it, run `dsh plugin --profile web remove dsh-hide-empty-workspace` and let the shipped sidebar own workspace visibility.
+
+This repository is kept for the record only: no new releases, no bug fixes.
+
+## Install (archived)
+
+These commands only matter if you still run the plugin; for new setups use the shipped sidebar.
 
 ```sh
 # from npm (shortest)
@@ -58,7 +74,7 @@ dsh plugin --profile web add /absolute/path/dsh-hide-empty-workspace
 
 It will not fire for:
 
-- **A freshly added workspace.** A new workspace has no sessions, but it is genuinely new to the plugin, so it is only recorded, never hidden. This is exactly why the plugin does not implement "hide when empty".
+- **A freshly added workspace.** The plugin only records it, never hides it; if it has no visible sessions, the shipped sidebar does not render the row anyway — that is upstream behavior, not this plugin.
 - **The workspace in use**, which stays visible even when it matches the rule.
 - **The "ungrouped" bucket**, which is never hidden.
 

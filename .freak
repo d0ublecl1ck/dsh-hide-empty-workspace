@@ -1,11 +1,6 @@
 # FREAK
 
-## 对标观察（每轮回炉先看这几家）
-- [ ] `SUZUNAMI/dsh-workspace-hide`（npm 820 次/月，0★）——同类里最像的一件：它靠设置页手动开关，隐藏时连带归档会话。盯它的 release notes 与 issue，看社区是否在抱怨「必须去设置页」；那正是本插件「自动」的立足点。记录：2026-10-02
-- [ ] `KannaKuron/dsh-better-workspace`（npm 5923 次/月，12★）——品类头部，hierarchical 工作区树。**IF** 它接管侧栏并改写行标记 **THEN** 本插件的自动隐藏会静默失效（自检横幅会替我们发现）。2026-10-07 临时装 0.27.2 实测：它只渲染自带的 `role="treeitem"`，页面 `[data-row-key]` 总数为 0，自检横幅如设计亮起；卸载后 profile 的 `package.json`/`cordis.patch.yml` 与备份逐字节一致、`verify:browser` 17/17。每次它发版后仍要跑一次验收确认行标记。记录：2026-10-07
-- [ ] `Robert-Wang-08/dsh-plugin-sidebar-visibility`（2★）——一个包塞了隐藏/折叠/拖排/会话动作七件事。盯它是否把「隐藏」做成自动化；若做，我们的差别只剩零数据改写与零配置。记录：2026-10-02
-- [ ] [awesome-dsh-plugin PR #6376](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/6376)（2026-10-02 提交）——投稿只加了一个 `data/plugins/d0ublecl1ck__dsh-hide-empty-workspace.yml`。仓库建于 `2026-10-02T07:05:22Z`，其 `check-submission.mjs` 的 `MIN_AGE_DAYS = 1` 会先判红，由 `regate.yml` 每 6 小时重跑并在满 1 天后自动转绿，**不要关闭重开或空提交**。盯 review 是否要求改分类或描述。记录：2026-10-02
-- [ ] `screenshots.json` —— 已声明三张（工作区行菜单里的隐藏入口态、隐藏生效态、恢复对话框态）。市场构建每晚抓取；若截图顺序或内容需要调整，推本仓库即可，不必再提 PR。记录：2026-10-02
+> 状态：已停止维护（2026-10-24）。插件仍可安装，但本仓库不再跟进官方改版；下面只保留「已安装用户可能踩到」的线索，对标观察与市场投稿已随归档停止跟踪。
 
 ## 未验证 / 可能漂移
 - [ ] `client.js` 的 `useWorkspaces()` / `useSessions()` 快照形状（`items[].sessionIds`、`archivedSessionIds`、`byId[].retainedBy.mainView`）只被结构化描述，没有对 official 包做类型校验；字段改名不会编译报错，只会静默失效。下次核对 `WorkspaceSnapshot` / `SessionListState`。记录：2026-10-02
@@ -20,3 +15,6 @@
 - [x] **恢复对话框 4 条断言**：2026-10-04 曾在真实实例上连失 4 条（点 `已隐藏 N` 后 `[role="dialog"]` 不存在、没有 `恢复` 动作、隐藏集合与行可见性未复位）；2026-10-07 重跑 `npm run verify:browser` 这 4 条全部通过（整轮 15 passed / 2 failed，2 条失败是当时尚未装上的新增模式断言）。旧结论按过期处理；若再复现，先查真实指针是否落到按钮上（脚本按 `button.textContent` 以「已隐藏 」开头来找它）。记录：2026-10-07
 - [x] 追加菜单项的「上膛」生命周期已在 0.4.1 钉住：`stepMenuArm` 四条单测 + 验收脚本「模型选择器菜单里没有隐藏入口」断言。记录：2026-10-04
 - [ ] 自检的 1500ms 等待是经验值（`MARKER_CHECK_DELAY_MS`）；现在它还决定模式判定时 DOM 是否已稳定（单列表体/rail 标记是否已渲染）。首屏更慢的机器上仍可能误报。下次在有冷启动压力的环境里复看。记录：2026-10-07
+
+## 归档时留下的待办
+- [ ] GitHub 仓库简介（About）仍把「自动隐藏」当卖点；README 与 `package.json` 已标注停止维护，仓库页头部未改，需要 `gh repo edit --description` 才会同步。记录：2026-10-24
